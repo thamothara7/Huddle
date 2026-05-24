@@ -84,6 +84,12 @@ export type SummaryResponse = {
   source: SummarySource;
 };
 
+export type SnoovatarResponse = {
+  type: 'snoovatar';
+  username: string;
+  url: string | null;
+};
+
 export type RecentEntry = {
   itemId: string;
   title: string;

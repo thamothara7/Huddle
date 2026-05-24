@@ -14,9 +14,11 @@ export const Splash = () => {
       </div>
 
       <div className="relative max-w-sm w-full text-center">
-        <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500 to-rose-500 grid place-items-center text-white text-3xl font-black shadow-xl shadow-orange-500/30 mb-5 select-none">
-          h
-        </div>
+        <img
+          src="/huddle-logo.svg"
+          alt="Huddle"
+          className="mx-auto w-16 h-16 rounded-2xl shadow-xl shadow-orange-500/30 mb-5 select-none"
+        />
 
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight mb-1">
           Huddle

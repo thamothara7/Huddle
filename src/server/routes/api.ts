@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { context, reddit } from '@devvit/web/server';
+import { context, reddit, redis } from '@devvit/web/server';
 import { fetchGroupedQueue } from '../core/queue';
 import { getItem, setItem } from '../core/items';
 import { removeItemFromAllGroups } from '../core/groups';
@@ -7,6 +7,7 @@ import { isThingId } from '../core/ids';
 import { computeUserFacts } from '../core/ai/facts';
 import { getOrGenerateSummary } from '../core/ai/summary';
 import { getActionTimeline, getRecentTitles } from '../core/history';
+import { k, USER_SNOOVATAR_TTL_SECONDS } from '../core/keys';
 import type {
   ActionRequest,
   ActionResponse,
@@ -15,6 +16,7 @@ import type {
   BulkActionResult,
   ContextPeekResponse,
   InitResponse,
+  SnoovatarResponse,
   SummaryResponse,
 } from '../../shared/api';
 
@@ -41,6 +43,45 @@ api.get('/init', async (c) => {
     username: username ?? 'anonymous',
     groups,
   });
+});
+
+const SNOOVATAR_CACHE_MISS = 'none';
+
+api.get('/snoovatar', async (c) => {
+  const username = c.req.query('username')?.trim();
+  if (!username) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: 'missing username' },
+      400
+    );
+  }
+  const cacheKey = k.userSnoovatar(username);
+  const cached = await redis.get(cacheKey);
+  if (cached) {
+    return c.json<SnoovatarResponse>({
+      type: 'snoovatar',
+      username,
+      url: cached === SNOOVATAR_CACHE_MISS ? null : cached,
+    });
+  }
+  let url: string | null = null;
+  try {
+    const fetched = await reddit.getSnoovatarUrl(username);
+    if (typeof fetched === 'string' && fetched.length > 0) url = fetched;
+  } catch (err) {
+    console.error(
+      `[huddle] /api/snoovatar failed for ${username}:`,
+      err instanceof Error ? err.message : err
+    );
+  }
+  try {
+    await redis.set(cacheKey, url ?? SNOOVATAR_CACHE_MISS, {
+      expiration: new Date(Date.now() + USER_SNOOVATAR_TTL_SECONDS * 1000),
+    });
+  } catch {
+    // best-effort cache write; ignore failures
+  }
+  return c.json<SnoovatarResponse>({ type: 'snoovatar', username, url });
 });
 
 api.get('/summary', async (c) => {

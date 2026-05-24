@@ -12,6 +12,7 @@ import type {
   QueueGroup,
   QueueItem,
   RecentEntry,
+  SnoovatarResponse,
   SummaryResponse,
   UserFacts,
 } from '../shared/api';
@@ -49,6 +50,58 @@ const useQueue = () => {
   }, [refresh]);
 
   return { groups, subredditName, loading, error, refresh };
+};
+
+const useSnoovatar = (username: string) => {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!username) return;
+    let alive = true;
+    fetch(`/api/snoovatar?username=${encodeURIComponent(username)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: SnoovatarResponse | null) => {
+        if (alive && d?.url) setUrl(d.url);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [username]);
+  return url;
+};
+
+const Avatar = ({
+  username,
+  size,
+  gradientCls,
+}: {
+  username: string;
+  size: 'sm' | 'md';
+  gradientCls: string;
+}) => {
+  const snoo = useSnoovatar(username);
+  const initial = initialFor(username);
+  const sizeCls = size === 'sm' ? 'w-8 h-8 text-sm' : 'w-9 h-9 text-sm';
+  return (
+    <div
+      className={`shrink-0 ${sizeCls} rounded-full bg-gradient-to-br ${gradientCls} grid place-items-center text-white font-bold shadow-sm select-none overflow-hidden`}
+      aria-hidden
+    >
+      {snoo ? (
+        <img
+          src={snoo}
+          alt=""
+          loading="lazy"
+          className="w-full h-full object-cover"
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).style.display = 'none';
+          }}
+        />
+      ) : (
+        initial
+      )}
+    </div>
+  );
 };
 
 const useSummary = (itemId: string) => {
@@ -296,7 +349,6 @@ const Group = ({
   onBulk: (a: 'approve' | 'remove') => void;
   onOpenDrawer: (item: QueueItem) => void;
 }) => {
-  const initial = initialFor(group.authorName);
   const gradient = avatarGradient(group.authorName);
   const [pendingBulk, setPendingBulk] = useState<'approve' | 'remove' | null>(
     null
@@ -326,12 +378,11 @@ const Group = ({
             className="flex items-center gap-3 flex-1 min-w-0 text-left"
             aria-expanded={expanded}
           >
-            <div
-              className={`shrink-0 w-9 h-9 rounded-full bg-gradient-to-br ${gradient} grid place-items-center text-white text-sm font-bold shadow-sm select-none`}
-              aria-hidden
-            >
-              {initial}
-            </div>
+            <Avatar
+              username={group.authorName}
+              size="md"
+              gradientCls={gradient}
+            />
             <div className="min-w-0">
               <p className="font-semibold truncate text-gray-900 dark:text-gray-100">
                 u/{group.authorName}
@@ -602,7 +653,6 @@ const ContextPeekDrawer = ({
 
   const authorName = data?.authorName ?? item.authorName;
   const gradient = avatarGradient(authorName);
-  const initial = initialFor(authorName);
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -615,12 +665,11 @@ const ContextPeekDrawer = ({
         <header className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 sticky top-0 bg-white/95 dark:bg-gray-950/95 backdrop-blur z-10">
           <div className="flex justify-between items-start gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div
-                className={`shrink-0 w-8 h-8 rounded-full bg-gradient-to-br ${gradient} grid place-items-center text-white text-sm font-bold select-none`}
-                aria-hidden
-              >
-                {initial}
-              </div>
+              <Avatar
+                username={authorName}
+                size="sm"
+                gradientCls={gradient}
+              />
               <div className="min-w-0">
                 <h2 className="font-semibold text-sm truncate text-gray-900 dark:text-gray-100">
                   u/{authorName}
@@ -790,9 +839,11 @@ const App = () => {
       <div className="max-w-3xl mx-auto p-3 sm:p-6">
         <header className="mb-4 sm:mb-5 flex justify-between items-center gap-2">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="shrink-0 w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-rose-500 grid place-items-center text-white font-black text-base shadow-md shadow-orange-500/20 select-none">
-              h
-            </div>
+            <img
+              src="/huddle-logo.svg"
+              alt=""
+              className="shrink-0 w-9 h-9 rounded-xl shadow-md shadow-orange-500/20 select-none"
+            />
             <div className="min-w-0">
               <h1 className="text-lg font-bold tracking-tight leading-none">
                 Huddle

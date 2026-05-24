@@ -9,10 +9,12 @@ export const k = {
     `huddle:user:${username}:recent:${subId}`,
   userActions: (username: string, subId: string) =>
     `huddle:user:${username}:actions:${subId}`,
+  userSnoovatar: (username: string) => `huddle:user:${username}:snoovatar`,
   summary: (itemId: string) => `huddle:summary:${itemId}`,
 };
 
 export const USER_STATS_TTL_SECONDS = 24 * 60 * 60;
+export const USER_SNOOVATAR_TTL_SECONDS = 24 * 60 * 60;
 export const USER_RECENT_CAP = 20;
 
 export const targetGroupKey = (authorKey: string) =>

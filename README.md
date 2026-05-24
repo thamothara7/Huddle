@@ -1,6 +1,10 @@
-# Huddle
+<p align="center">
+  <img src="public/huddle-logo.svg" width="96" height="96" alt="Huddle logo"/>
+</p>
 
-> Reports cluster by user. A factual one-sentence summary appears on every queue item. One click reveals the underlying context — without leaving Reddit.
+<h1 align="center">Huddle</h1>
+
+<p align="center"><em>Reports cluster by user. A factual one-sentence summary appears on every queue item. One click reveals the underlying context — without leaving Reddit.</em></p>
 
 Built for the **Reddit Mod Tools and Migrated Apps Hackathon** — submission category: Best New Mod Tool.
 
