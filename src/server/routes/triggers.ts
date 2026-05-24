@@ -18,6 +18,7 @@ import {
   appendRecent,
   updateRecentStatus,
 } from '../core/history';
+import { fetchReportsSnapshot } from '../core/reports';
 import type { QueueItem } from '../../shared/api';
 
 export const triggers = new Hono();
@@ -64,6 +65,19 @@ triggers.post('/on-app-install', async (c) => {
   }
 });
 
+const syncReportsFromApi = async (item: QueueItem): Promise<QueueItem> => {
+  const snap = await fetchReportsSnapshot(item.itemId);
+  if (!snap) return item;
+  const merged: QueueItem = {
+    ...item,
+    reportReasons: snap.userReports,
+    modReports: snap.modReports,
+    reportCount: snap.userReports.length + snap.modReports.length || item.reportCount,
+  };
+  await setItem(merged);
+  return merged;
+};
+
 triggers.post('/on-post-report', async (c) => {
   const input = await c.req.json<OnPostReportRequest>();
   const post = input.post;
@@ -72,7 +86,7 @@ triggers.post('/on-post-report', async (c) => {
     return c.json<TriggerResponse>({}, 200);
   }
   const now = Date.now();
-  const item = await upsertReport(
+  let item = await upsertReport(
     post.id,
     () => ({
       itemId: post.id,
@@ -93,6 +107,7 @@ triggers.post('/on-post-report', async (c) => {
     item.authorName = await resolveAuthorName(item.authorId, item.authorId);
     await setItem(item);
   }
+  item = await syncReportsFromApi(item);
   await addItemToGroups(subId, item.itemId, item.authorId, now);
   return c.json<TriggerResponse>({}, 200);
 });
@@ -106,7 +121,7 @@ triggers.post('/on-comment-report', async (c) => {
   }
   const authorName = comment.author || 'unknown';
   const now = Date.now();
-  const item = await upsertReport(
+  let item = await upsertReport(
     comment.id,
     () => ({
       itemId: comment.id,
@@ -123,6 +138,7 @@ triggers.post('/on-comment-report', async (c) => {
     }),
     input.reason
   );
+  item = await syncReportsFromApi(item);
   await addItemToGroups(subId, item.itemId, item.authorId, now);
   return c.json<TriggerResponse>({}, 200);
 });

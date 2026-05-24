@@ -141,9 +141,17 @@ const ItemRow = ({
           Reports:{' '}
           {item.reportReasons.length > 0
             ? item.reportReasons.join(' · ')
-            : '(no reason given)'}
+            : '(no user reports)'}
           {item.reportCount > 1 ? ` · ${item.reportCount} total` : ''}
         </div>
+        {item.modReports && item.modReports.length > 0 && (
+          <div className="text-amber-700 dark:text-amber-300 text-[11px] mt-0.5">
+            <span className="font-mono bg-amber-100 dark:bg-amber-900/40 px-1 rounded mr-1">
+              MOD
+            </span>
+            {item.modReports.join(' · ')}
+          </div>
+        )}
       </button>
       <div className="flex flex-col items-end gap-1 shrink-0">
         {url && (

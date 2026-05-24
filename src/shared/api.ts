@@ -8,6 +8,7 @@ export type QueueItem = {
   title?: string;
   permalink?: string;
   reportReasons: string[];
+  modReports?: string[];
   reportCount: number;
   createdAt: number;
   status: 'open' | 'actioned';
