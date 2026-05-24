@@ -228,7 +228,15 @@ const ItemRow = ({
             <span className="inline-block mr-1.5 px-1.5 py-0.5 rounded font-mono text-[9px] uppercase tracking-wider bg-amber-100 dark:bg-amber-900/40 align-baseline">
               MOD
             </span>
-            {item.modReports.join(' · ')}
+            {item.modReports.map((r, i) => (
+              <span key={`${r.reason}-${i}`}>
+                {i > 0 && ' · '}
+                {r.reason}
+                {r.modName && (
+                  <span className="opacity-70"> by u/{r.modName}</span>
+                )}
+              </span>
+            ))}
           </p>
         )}
       </button>
@@ -435,6 +443,8 @@ const ACTION_COLORS: Record<ActionEntry['action'], string> = {
   approve: 'bg-emerald-500',
   remove: 'bg-rose-500',
   spam: 'bg-gray-900 dark:bg-gray-100',
+  ban: 'bg-purple-600',
+  mute: 'bg-amber-500',
 };
 
 const Timeline = ({ actions }: { actions: ActionEntry[] }) => {
@@ -484,6 +494,12 @@ const Timeline = ({ actions }: { actions: ActionEntry[] }) => {
         </span>
         <span className="inline-flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-gray-900 dark:bg-gray-100" /> spam
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-purple-600" /> banned
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" /> muted
         </span>
       </div>
     </div>

@@ -6,19 +6,19 @@ Paste each section into the corresponding Devpost field. Hackathon: **Reddit Mod
 
 ## Tagline (140 chars)
 
-The Reddit modqueue, with intelligence. Items cluster automatically. AI summarizes context. One click verifies — without leaving the queue.
+Reports cluster by user. One click reveals context. Bulk-action a bad actor in one move — without leaving Reddit.
 
 ---
 
 ## Inspiration
 
-Two recent peer-reviewed papers from Bajpai & Chandrasekharan (UMich) put numbers on a problem moderators have lived with for years:
+Two peer-reviewed papers from Bajpai & Chandrasekharan (UMich) put hard numbers on a problem moderators have lived with for years:
 
-- **84% of moderators leave the modqueue to gather context** on nearly every report they review — checking user history, scrolling parent threads, scanning prior mod logs (*In the Queue*, arxiv 2509.07314, 2025).
-- **74.5% of moderators prefer visual cues over additional sorting/filtering** (*Towards a Better Modqueue*, arxiv 2409.16840, 2025).
+- **84% of moderators "sometimes, often, or almost always" leave the modqueue to seek additional context** while reviewing reports — checking user history, scrolling parent threads, scanning prior mod logs (Bajpai & Chandrasekharan, *In the Queue*, [CHI 2026](https://dl.acm.org/doi/10.1145/3772318.3791931)).
+- **74.5% of moderators report experiencing a collision** — two mods unknowingly acting on the same item at the same time (Bajpai & Chandrasekharan, *Towards a Better Modqueue*, [arxiv 2409.16840](https://arxiv.org/abs/2409.16840)).
 - The modqueue UI has not been redesigned since 2008.
 
-That 84% statistic is the entire premise. Every time a mod leaves the queue to check context, they lose seconds — across a busy sub, that's hours per week of volunteer time. Huddle brings the context to the queue.
+Every time a mod leaves the queue to gather context, they lose seconds. Across a busy sub, that's hours per week of unpaid volunteer time. Huddle brings the context to the queue.
 
 ---
 
@@ -28,9 +28,11 @@ Huddle installs as a custom post in any subreddit you moderate. Open it and you 
 
 - **Automatic grouping** — reports cluster by author. Multiple reports against one user collapse into one row with bulk Approve all / Remove all actions.
 - **Factual AI summaries** — every item shows a one-sentence summary like *"This 259-day-old account has made 2 comments in this subreddit, both within the last 7 days."* The LLM **never sees the reported content** — only a structured fact dict (account age, posts/comments in sub, last 7 days, prior removals). The prompt is strict: factual, no judgment words, max 25 words. Summaries are cached forever per item.
+
+  > **Why an AI that can't see content?** Every other AI mod tool risks hallucinating about your community's content. Huddle's LLM only sees a 5-field fact dict — it cannot make claims it can't justify. Mods see the exact same dict next to the AI's sentence in the Context Peek drawer, so every summary is auditable.
+
 - **Context Peek drawer** — click any item, a right-side drawer slides in showing (1) the exact facts the AI received as a small table, (2) the user's last 5 post/comment titles in this sub with status badges (✓ approved · ✗ removed · ⏳ pending), and (3) a 30-day mod-action mini-timeline. **Titles only — never body content.** Mods who want to read full content click "Open on Reddit ↗" to leave Huddle deliberately.
 - **Bulk + inline actions** — Approve / Remove individual items, or Approve all / Remove all at the group level. Everything goes through Reddit's API; Huddle never auto-actions without an explicit click.
-- **Mod-report distinction** — when a moderator (not an anonymous user) reports an item, it surfaces with a distinct amber "MOD" chip in the row.
 
 ---
 
@@ -40,7 +42,7 @@ Huddle installs as a custom post in any subreddit you moderate. Open it and you 
 - **Redis** for the entire data plane — ZSETs for group sets and per-user history (recent titles capped at 20, 30-day action timeline), HASH for the user-facts cache (24h TTL), STRING for cached AI summaries (forever). Because Devvit Redis has no plain SET ops, we use ZSETs with timestamp scores throughout.
 - **React 19 + Tailwind 4 + Vite** for the WebView — the queue polls `/api/init` every 5 seconds; each item lazy-fetches its AI summary; the drawer is a render-time composition over data already in Redis (no extra LLM call when the drawer opens).
 - **Google Gemini Flash** (`gemini-flash-latest`) via Google AI Studio's free tier — 1,500 requests/day, no card required. The system prompt locks the model into one neutral sentence ≤25 words, never adding opinion words. Thinking mode disabled (`thinkingBudget: 0`) so we get a clean answer in `parts[0]`. Every failure path (no key, network error, 429, safety block, response under 10 chars) silently falls back to a templated raw-facts sentence over the same fact dict.
-- **Reddit Reddit API client** — `getCommentsAndPostsByUser`, `getUserByUsername`, `getPostById`, `getCommentById` for facts and report-snapshot sync; `approve(id)` / `remove(id, false)` for actions.
+- **Reddit API client** — `getCommentsAndPostsByUser`, `getUserByUsername`, `getPostById`, `getCommentById` for facts and report-snapshot sync; `approve(id)` / `remove(id, false)` for actions.
 - **TypeScript** end-to-end. Branded `t1_` / `t3_` / `t2_` thing-id types narrowed via runtime predicates rather than casts.
 
 A reverse-lookup `huddle:item-groups:{itemId}` ZSET lets mod-action cleanup remove an actioned item from every group it belongs to in a single pass — the spec called this out as the most common bug in similar tools.
@@ -63,6 +65,7 @@ A reverse-lookup `huddle:item-groups:{itemId}` ZSET lets mod-action cleanup remo
 - **The AI never sees content.** This was a non-negotiable design constraint — it eliminates the entire class of hallucination and judgment errors that plague AI moderation tools. Every summary is grounded in deterministic facts; the LLM is just a sentence formatter.
 - **The fallback path is invisible to users.** Whether Gemini returns prose or the raw-facts formatter takes over, the moderator sees the same shape of information in the same place — the LLM is genuine polish, not a load-bearing dependency.
 - **The Context Peek drawer is AI-free by design.** It composes facts + history that are already in Redis. No extra LLM call. The "AI legibility" promise is literal: mods see the exact dict the AI received.
+- **Mod reports surface distinctly.** When a moderator (not an anonymous user) reports an item, the row shows an amber MOD chip with the mod's name when Reddit's API exposes it — anonymous user reports stay anonymous per Reddit's policy.
 - **Backed by peer-reviewed research.** Every feature maps to a finding in the Bajpai papers.
 
 ---
@@ -77,13 +80,16 @@ A reverse-lookup `huddle:item-groups:{itemId}` ZSET lets mod-action cleanup remo
 
 ## What's next
 
+Huddle solves the "leaving the queue for context" half of the modqueue problem. Bajpai 2025a notes that moderators still leave the queue to (1) take user-level actions like banning, (2) check Toolbox usernotes, and (3) read full thread context. The roadmap below addresses each of these honestly:
+
+- **Live mod presence** — avatar dots on each row so two mods don't act on the same item simultaneously (the 74.5% collision stat above).
 - **Persistent realtime updates** instead of 5-second polling, via Devvit's realtime channel.
-- **Live mod presence** — avatar dots on each row so two mods don't act on the same item simultaneously (the second pain point in Bajpai 2025a).
+- **In-drawer ban / mute / approve-user actions** — close the loop on user-level decisions without leaving Huddle.
+- **Toolbox usernote integration** so existing notes surface in the Context Peek drawer.
 - **Reporter reliability scoring** once Huddle has accumulated enough per-user history.
 - **Postmortem auto-generation** for actioned items, summarizing what happened and why.
-- **Toolbox usernote integration** so existing notes surface in the Context Peek drawer.
 
-These were deliberately scoped out of the MVP per spec §4. The 4-day budget went to the headline 84%-fix.
+These were deliberately scoped out of the MVP per the original spec. The 4-day budget went to the headline 84%-fix.
 
 ---
 

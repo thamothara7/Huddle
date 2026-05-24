@@ -1,18 +1,18 @@
 import { redis } from '@devvit/web/server';
 import { k, USER_RECENT_CAP } from './keys';
+import type { ActionEntry, RecentEntry } from '../../shared/api';
 
-export type RecentEntry = {
-  itemId: string;
-  title: string;
-  status: 'pending' | 'approved' | 'removed' | 'spam';
-  createdAt: number;
-};
+export type { ActionEntry, RecentEntry };
 
-export type ActionEntry = {
-  action: 'approve' | 'remove' | 'spam';
-  modId: string;
-  itemId: string;
-  timestamp: number;
+const safeParse = <T,>(raw: string, where: string): T | null => {
+  try {
+    return JSON.parse(raw) as T;
+  } catch (err) {
+    console.error(
+      `[huddle] ${where}: failed to parse ZSET member: ${err instanceof Error ? err.message : String(err)} · raw=${JSON.stringify(raw.slice(0, 80))}`
+    );
+    return null;
+  }
 };
 
 export const appendRecent = async (
@@ -43,7 +43,8 @@ export const updateRecentStatus = async (
   const key = k.userRecent(username, subId);
   const rows = await redis.zRange(key, 0, -1, { by: 'rank' });
   for (const row of rows) {
-    const entry = JSON.parse(row.member) as RecentEntry;
+    const entry = safeParse<RecentEntry>(row.member, 'updateRecentStatus');
+    if (!entry) continue;
     if (entry.itemId === itemId) {
       const updated: RecentEntry = { ...entry, status };
       await redis.zRem(key, [row.member]);
@@ -65,9 +66,13 @@ export const getRecentTitles = async (
     by: 'rank',
     reverse: true,
   });
-  return rows
-    .slice(0, limit)
-    .map((r) => JSON.parse(r.member) as RecentEntry);
+  const out: RecentEntry[] = [];
+  for (const r of rows) {
+    if (out.length >= limit) break;
+    const entry = safeParse<RecentEntry>(r.member, 'getRecentTitles');
+    if (entry) out.push(entry);
+  }
+  return out;
 };
 
 export const appendAction = async (
@@ -90,5 +95,10 @@ export const getActionTimeline = async (
   const rows = await redis.zRange(k.userActions(username, subId), cutoff, '+inf', {
     by: 'score',
   });
-  return rows.map((r) => JSON.parse(r.member) as ActionEntry);
+  const out: ActionEntry[] = [];
+  for (const r of rows) {
+    const entry = safeParse<ActionEntry>(r.member, 'getActionTimeline');
+    if (entry) out.push(entry);
+  }
+  return out;
 };

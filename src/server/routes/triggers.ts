@@ -12,7 +12,7 @@ import { context, reddit } from '@devvit/web/server';
 import { createPost } from '../core/post';
 import { getItem, setItem, upsertReport } from '../core/items';
 import { addItemToGroups, removeItemFromAllGroups } from '../core/groups';
-import { isUserId } from '../core/ids';
+import { isCommentId, isUserId } from '../core/ids';
 import {
   appendAction,
   appendRecent,
@@ -31,6 +31,11 @@ const CLOSING_ACTIONS = new Set([
   'removecomment',
   'spamcomment',
 ]);
+
+const USER_LEVEL_ACTIONS: Record<string, 'ban' | 'mute'> = {
+  banuser: 'ban',
+  muteuser: 'mute',
+};
 
 const resolveAuthorName = async (
   authorId: string,
@@ -116,10 +121,28 @@ triggers.post('/on-comment-report', async (c) => {
   const input = await c.req.json<OnCommentReportRequest>();
   const comment = input.comment;
   const subId = context.subredditId;
-  if (!comment?.id || !subId) {
+  if (!comment?.id || !subId || !isCommentId(comment.id)) {
     return c.json<TriggerResponse>({}, 200);
   }
-  const authorName = comment.author || 'unknown';
+  const fallbackName = comment.author || 'unknown';
+
+  // The CommentReport trigger payload exposes only the author username — not a
+  // t2_ user id. Fetch the full Comment model so we group by the same authorId
+  // as posts (otherwise the same user's comments and posts split into two
+  // groups with different keys).
+  let authorId: string = fallbackName;
+  let authorName: string = fallbackName;
+  try {
+    const fetched = await reddit.getCommentById(comment.id);
+    authorId = fetched.authorId ?? fallbackName;
+    authorName = fetched.authorName ?? fallbackName;
+  } catch (err) {
+    console.error(
+      `[huddle] on-comment-report: getCommentById failed for ${comment.id}:`,
+      err instanceof Error ? err.message : err
+    );
+  }
+
   const now = Date.now();
   let item = await upsertReport(
     comment.id,
@@ -127,7 +150,7 @@ triggers.post('/on-comment-report', async (c) => {
       itemId: comment.id,
       type: 'comment',
       subId,
-      authorId: authorName,
+      authorId,
       authorName,
       parentPostId: comment.postId,
       permalink: comment.permalink,
@@ -146,6 +169,26 @@ triggers.post('/on-comment-report', async (c) => {
 triggers.post('/on-mod-action', async (c) => {
   const input = await c.req.json<OnModActionRequest>();
   const action = input.action ?? '';
+  const subId = context.subredditId;
+  const modName = input.moderator?.name ?? 'unknown';
+  const now = Date.now();
+
+  // Branch 1: user-level actions (ban / mute) — timeline-only, no queue-item cleanup.
+  const userLevelKind = USER_LEVEL_ACTIONS[action];
+  if (userLevelKind) {
+    const targetName = input.targetUser?.name;
+    if (subId && targetName) {
+      await appendAction(targetName, subId, {
+        action: userLevelKind,
+        modId: modName,
+        itemId: input.targetUser?.id ?? targetName,
+        timestamp: now,
+      });
+    }
+    return c.json<TriggerResponse>({}, 200);
+  }
+
+  // Branch 2: item-closing actions (approve / remove / spam) — full cleanup.
   if (!CLOSING_ACTIONS.has(action)) {
     return c.json<TriggerResponse>({}, 200);
   }
@@ -175,9 +218,9 @@ triggers.post('/on-mod-action', async (c) => {
     await Promise.all([
       appendAction(existing.authorName, existing.subId, {
         action: actionKind,
-        modId: input.moderator?.name ?? 'unknown',
+        modId: modName,
         itemId: targetId,
-        timestamp: Date.now(),
+        timestamp: now,
       }),
       updateRecentStatus(existing.authorName, existing.subId, targetId, recentStatus),
     ]);

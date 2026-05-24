@@ -1,6 +1,6 @@
 # Huddle
 
-> The Reddit modqueue, with intelligence. Items cluster automatically. A factual one-sentence summary appears on every report. One click reveals the underlying context — without leaving the queue.
+> Reports cluster by user. A factual one-sentence summary appears on every queue item. One click reveals the underlying context — without leaving Reddit.
 
 Built for the **Reddit Mod Tools and Migrated Apps Hackathon** — submission category: Best New Mod Tool.
 
@@ -8,13 +8,13 @@ Built for the **Reddit Mod Tools and Migrated Apps Hackathon** — submission ca
 
 ## The problem
 
-Reddit moderators spend hours each week leaving the modqueue just to gather context: checking user history, scrolling parent threads, scanning prior mod logs. Two recent peer-reviewed papers quantify this:
+Reddit moderators spend hours each week leaving the modqueue just to gather context: checking user history, scrolling parent threads, scanning prior mod logs. Two peer-reviewed papers quantify this:
 
-- **84% of moderators leave the queue to gather context** on nearly every item they review.[^1]
-- **74.5% of moderators prefer visual cues over additional sorting/filtering**.[^2]
+- **84% of moderators "sometimes, often, or almost always" leave the modqueue to seek additional context** while reviewing reports.[^1]
+- **74.5% of moderators report experiencing a collision** — two mods unknowingly acting on the same item at the same time.[^2]
 - The modqueue UI has not been redesigned since 2008.
 
-[^1]: Bajpai, T., & Chandrasekharan, E. (2025). *In the Queue: Understanding How Reddit Moderators Use the Modqueue.* arxiv:2509.07314. <https://arxiv.org/abs/2509.07314>
+[^1]: Bajpai, T., & Chandrasekharan, E. (2026). *In the Queue: Understanding How Reddit Moderators Use the Modqueue.* CHI '26. DOI: [10.1145/3772318.3791931](https://dl.acm.org/doi/10.1145/3772318.3791931). Preprint: <https://arxiv.org/abs/2509.07314>
 
 [^2]: Bajpai, T., & Chandrasekharan, E. (2025). *Towards a Better Modqueue: Designing for Diversity Across Moderator Objectives and Workflows.* arxiv:2409.16840. <https://arxiv.org/abs/2409.16840>
 
@@ -121,6 +121,7 @@ Reddit triggers (PostReport, CommentReport, ModAction, PostSubmit, CommentSubmit
 - **Action timeline starts at install date.** Huddle records mod actions it observes; it cannot backfill the full history of a user.
 - **User reports are anonymous.** Reddit's trigger payload does not expose reporter identity for user reports, by policy. Huddle surfaces only the report **reason** — and, when present, mod-initiated reports through a distinct amber "MOD" chip.
 - **Single AI provider.** Gemini Flash via Google AI Studio's free tier. Failures of any kind (no key, network, 429, safety block) silently fall back to the raw-facts sentence — Huddle never blocks the UI on the LLM.
+- **What Huddle doesn't fix yet.** Bajpai 2025a notes mods still leave the queue to (1) take user-level actions like banning, (2) check Toolbox usernotes, and (3) read full thread context. Huddle closes the "gather context to decide" loop; the user-level-action and Toolbox-integration loops are roadmap items, not v1.
 
 ## License
 

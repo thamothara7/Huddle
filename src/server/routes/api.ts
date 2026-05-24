@@ -52,11 +52,23 @@ api.get('/summary', async (c) => {
       400
     );
   }
+  if (!isThingId(itemId)) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: `not a post or comment id: ${itemId}` },
+      400
+    );
+  }
   const item = await getItem(itemId);
   if (!item) {
     return c.json<ErrorResponse>(
       { status: 'error', message: `item ${itemId} not found` },
       404
+    );
+  }
+  if (item.subId !== subredditId) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: 'item is not in this subreddit' },
+      403
     );
   }
   const facts = await computeUserFacts(item.authorName, subredditId);
@@ -81,11 +93,23 @@ api.get('/context-peek', async (c) => {
       400
     );
   }
+  if (!isThingId(itemId)) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: `not a post or comment id: ${itemId}` },
+      400
+    );
+  }
   const item = await getItem(itemId);
   if (!item) {
     return c.json<ErrorResponse>(
       { status: 'error', message: `item ${itemId} not found` },
       404
+    );
+  }
+  if (item.subId !== subredditId) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: 'item is not in this subreddit' },
+      403
     );
   }
   const [facts, recent, actions] = await Promise.all([

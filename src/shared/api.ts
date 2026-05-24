@@ -1,3 +1,8 @@
+export type ModReportEntry = {
+  reason: string;
+  modName?: string;
+};
+
 export type QueueItem = {
   itemId: string;
   type: 'post' | 'comment';
@@ -8,7 +13,7 @@ export type QueueItem = {
   title?: string;
   permalink?: string;
   reportReasons: string[];
-  modReports?: string[];
+  modReports?: ModReportEntry[];
   reportCount: number;
   createdAt: number;
   status: 'open' | 'actioned';
@@ -87,7 +92,7 @@ export type RecentEntry = {
 };
 
 export type ActionEntry = {
-  action: 'approve' | 'remove' | 'spam';
+  action: 'approve' | 'remove' | 'spam' | 'ban' | 'mute';
   modId: string;
   itemId: string;
   timestamp: number;
