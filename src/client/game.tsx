@@ -655,6 +655,16 @@ const TICKS: Array<{ label: string; pct: number }> = [
   { label: '7d', pct: 76.67 },
 ];
 
+const ACTION_KINDS: Array<ActionEntry['action']> = [
+  'approve',
+  'remove',
+  'spam',
+  'ban',
+  'mute',
+];
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 const Timeline = ({ actions }: { actions: ActionEntry[] }) => {
   const [now] = useState(() => Date.now());
   if (actions.length === 0) {
@@ -664,11 +674,23 @@ const Timeline = ({ actions }: { actions: ActionEntry[] }) => {
       </p>
     );
   }
-  const windowMs = 30 * 24 * 60 * 60 * 1000;
   const mostRecent = actions.reduce(
     (max, a) => (a.timestamp > max ? a.timestamp : max),
     0
   );
+
+  // Bucket actions by day index (0 = today, 29 = 30 days ago).
+  const dayBuckets: Array<ActionEntry[]> = Array.from(
+    { length: 30 },
+    () => [] as ActionEntry[]
+  );
+  for (const a of actions) {
+    const dayIdx = Math.floor((now - a.timestamp) / DAY_MS);
+    if (dayIdx < 0 || dayIdx >= 30) continue;
+    dayBuckets[dayIdx]!.push(a);
+  }
+  const maxDay = Math.max(1, ...dayBuckets.map((arr) => arr.length));
+
   return (
     <div>
       <p className="text-[11px] text-gray-600 dark:text-gray-400 mb-2">
@@ -681,36 +703,74 @@ const Timeline = ({ actions }: { actions: ActionEntry[] }) => {
           {relativeTime(mostRecent, now)}
         </span>
       </p>
-      <div className="relative h-10 rounded-md bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-900 dark:to-gray-900/40 border border-gray-200/60 dark:border-gray-800/60 overflow-hidden">
+
+      <div className="relative h-14 rounded-md bg-gray-50 dark:bg-gray-900/60 border border-gray-200/60 dark:border-gray-800/60 overflow-hidden">
+        {/* Dashed tick lines at 7d / 14d / 21d for axis context */}
         {TICKS.map((t) => (
           <div
             key={t.label}
-            className="absolute top-1 bottom-1 border-l border-dashed border-gray-300/70 dark:border-gray-700/60"
+            className="absolute top-1 bottom-1 border-l border-dashed border-gray-300/70 dark:border-gray-700/60 pointer-events-none"
             style={{ left: `${t.pct}%` }}
             aria-hidden
           />
         ))}
-        {actions.map((a, idx) => {
-          const ageMs = now - a.timestamp;
-          const pct = Math.max(
-            2,
-            Math.min(98, ((windowMs - ageMs) / windowMs) * 100)
-          );
-          const yJitter = (idx % 4) * 5;
-          return (
-            <div
-              key={`${a.itemId}-${a.timestamp}`}
-              title={`${a.action} by ${a.modId} · ${new Date(a.timestamp).toLocaleString()}`}
-              className={`absolute w-2.5 h-2.5 rounded-full ring-2 ring-white dark:ring-gray-900 ${ACTION_COLORS[a.action]}`}
-              style={{
-                left: `${pct}%`,
-                top: `${10 + yJitter}px`,
-                transform: 'translateX(-50%)',
-              }}
-            />
-          );
-        })}
+        {/* 30 day columns, today on right (dayIdx 0), 30d ago on left (dayIdx 29) */}
+        <div
+          className="absolute inset-1 grid items-end gap-px"
+          style={{ gridTemplateColumns: 'repeat(30, minmax(0, 1fr))' }}
+        >
+          {Array.from({ length: 30 }, (_, i) => 29 - i).map((dayIdx) => {
+            const arr = dayBuckets[dayIdx] ?? [];
+            if (arr.length === 0) {
+              return <div key={dayIdx} className="h-full" aria-hidden />;
+            }
+            const counts: Record<ActionEntry['action'], number> = {
+              approve: 0,
+              remove: 0,
+              spam: 0,
+              ban: 0,
+              mute: 0,
+            };
+            for (const a of arr) counts[a.action] += 1;
+            const heightPct = (arr.length / maxDay) * 100;
+            const label =
+              dayIdx === 0
+                ? 'today'
+                : dayIdx === 1
+                  ? 'yesterday'
+                  : `${dayIdx}d ago`;
+            const breakdown = ACTION_KINDS.filter((k) => counts[k] > 0)
+              .map((k) => `${counts[k]} ${k}`)
+              .join(', ');
+            return (
+              <div
+                key={dayIdx}
+                className="h-full flex flex-col justify-end"
+                title={`${label}: ${arr.length} action${arr.length === 1 ? '' : 's'} (${breakdown})`}
+              >
+                <div
+                  className="w-full flex flex-col rounded-sm overflow-hidden"
+                  style={{ height: `${heightPct}%` }}
+                >
+                  {ACTION_KINDS.map((kind) => {
+                    if (counts[kind] === 0) return null;
+                    return (
+                      <div
+                        key={kind}
+                        className={ACTION_COLORS[kind]}
+                        style={{
+                          height: `${(counts[kind] / arr.length) * 100}%`,
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
+
       <div className="relative mt-1.5 h-3 text-[10px] text-gray-500 dark:text-gray-400">
         <span className="absolute left-0">30 days ago</span>
         {TICKS.map((t) => (
