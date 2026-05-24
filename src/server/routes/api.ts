@@ -6,6 +6,7 @@ import { listOpenItemIds, removeItemFromAllGroups } from '../core/groups';
 import { isThingId, isUserId } from '../core/ids';
 import { computeUserFacts } from '../core/ai/facts';
 import { generateRemovalReason } from '../core/ai/reason';
+import { getOrGenerateSuggestion } from '../core/ai/suggest';
 import { getOrGenerateSummary } from '../core/ai/summary';
 import { getActionTimeline, getRecentTitles } from '../core/history';
 import { k, USER_SNOOVATAR_TTL_SECONDS } from '../core/keys';
@@ -20,6 +21,7 @@ import type {
   RejectWithReasonRequest,
   RejectWithReasonResponse,
   SnoovatarResponse,
+  SuggestionResponse,
   SuggestReasonResponse,
   SummaryResponse,
   UserActionRequest,
@@ -295,6 +297,52 @@ api.post('/action-bulk', async (c) => {
     results,
     okCount,
     failCount: results.length - okCount,
+  });
+});
+
+api.get('/suggestion', async (c) => {
+  const { subredditId } = context;
+  const itemId = c.req.query('itemId');
+  if (!itemId || !subredditId) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: 'missing itemId or context' },
+      400
+    );
+  }
+  if (!isThingId(itemId)) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: `not a post or comment id: ${itemId}` },
+      400
+    );
+  }
+  const item = await getItem(itemId);
+  if (!item) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: `item ${itemId} not found` },
+      404
+    );
+  }
+  if (item.subId !== subredditId) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: 'item is not in this subreddit' },
+      403
+    );
+  }
+  const facts = await computeUserFacts(item.authorName, subredditId);
+  const suggestion = await getOrGenerateSuggestion(itemId, {
+    itemType: item.type,
+    userReportReasons: item.reportReasons,
+    modReportReasons: (item.modReports ?? []).map((m) => m.reason),
+    accountAgeDays: facts.accountAgeDays,
+    postsInSubTotal: facts.postsInSubTotal,
+    commentsInSubTotal: facts.commentsInSubTotal,
+    inSubLast7d: facts.inSubLast7d,
+    priorRemovals: facts.removedInSubTotal,
+  });
+  return c.json<SuggestionResponse>({
+    type: 'suggestion',
+    itemId,
+    suggestion,
   });
 });
 

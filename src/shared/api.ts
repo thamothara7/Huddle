@@ -119,6 +119,21 @@ export type SummaryResponse = {
   source: SummarySource;
 };
 
+export type ModSuggestionAction = 'approve' | 'remove' | 'spam' | 'review';
+export type ModSuggestionConfidence = 'low' | 'medium' | 'high';
+
+export type ModSuggestion = {
+  action: ModSuggestionAction;
+  confidence: ModSuggestionConfidence;
+  why: string;
+};
+
+export type SuggestionResponse = {
+  type: 'suggestion';
+  itemId: string;
+  suggestion: ModSuggestion | null;
+};
+
 export type SnoovatarResponse = {
   type: 'snoovatar';
   username: string;

@@ -9,11 +9,13 @@ import type {
   BulkActionResponse,
   ContextPeekResponse,
   InitResponse,
+  ModSuggestion,
   QueueGroup,
   QueueItem,
   RecentEntry,
   RejectWithReasonResponse,
   SnoovatarResponse,
+  SuggestionResponse,
   SuggestReasonResponse,
   SummaryResponse,
   UserActionResponse,
@@ -127,6 +129,31 @@ const Avatar = ({
       )}
     </div>
   );
+};
+
+const useSuggestion = (itemId: string) => {
+  const [suggestion, setSuggestion] = useState<ModSuggestion | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/suggestion?itemId=${encodeURIComponent(itemId)}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+      .then((data: SuggestionResponse) => {
+        if (alive) setSuggestion(data.suggestion);
+      })
+      .catch(() => {
+        if (alive) setSuggestion(null);
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [itemId]);
+
+  return { suggestion, loading };
 };
 
 const useSummary = (itemId: string) => {
@@ -253,6 +280,60 @@ const avatarGradient = (seed: string): string => {
   return palette[Math.abs(h) % palette.length]!;
 };
 
+const SUGGESTION_STYLE: Record<
+  Exclude<ModSuggestion['action'], 'review'>,
+  { label: string; cls: string; dot: string }
+> = {
+  approve: {
+    label: 'Approve',
+    cls: 'bg-emerald-50 border-emerald-200/60 text-emerald-900 dark:bg-emerald-950/30 dark:border-emerald-800/50 dark:text-emerald-100',
+    dot: 'bg-emerald-500',
+  },
+  remove: {
+    label: 'Remove',
+    cls: 'bg-rose-50 border-rose-200/60 text-rose-900 dark:bg-rose-950/30 dark:border-rose-800/50 dark:text-rose-100',
+    dot: 'bg-rose-500',
+  },
+  spam: {
+    label: 'Spam',
+    cls: 'bg-gray-100 border-gray-300/60 text-gray-900 dark:bg-gray-800/60 dark:border-gray-700/50 dark:text-gray-100',
+    dot: 'bg-gray-900 dark:bg-gray-100',
+  },
+};
+
+const CONFIDENCE_LABEL: Record<ModSuggestion['confidence'], string> = {
+  high: 'high confidence',
+  medium: 'medium confidence',
+  low: 'low confidence',
+};
+
+const SuggestionChip = ({ suggestion }: { suggestion: ModSuggestion }) => {
+  if (suggestion.action === 'review') return null;
+  const style = SUGGESTION_STYLE[suggestion.action];
+  return (
+    <div
+      className={`mt-2.5 px-2.5 py-2 rounded-lg border ${style.cls}`}
+      role="note"
+      aria-label={`AI suggestion: ${style.label}`}
+    >
+      <div className="flex items-center gap-1.5 mb-0.5">
+        <span
+          className={`inline-block w-2 h-2 rounded-full ${style.dot}`}
+          aria-hidden
+        />
+        <span className="text-[10px] uppercase tracking-wider font-semibold opacity-70">
+          AI suggests
+        </span>
+        <span className="text-xs font-bold">{style.label}</span>
+        <span className="text-[10px] font-normal opacity-60">
+          · {CONFIDENCE_LABEL[suggestion.confidence]}
+        </span>
+      </div>
+      <p className="text-[11px] leading-snug opacity-90">{suggestion.why}</p>
+    </div>
+  );
+};
+
 const ItemRow = ({
   item,
   subredditName,
@@ -269,6 +350,7 @@ const ItemRow = ({
   onOpenDrawer: () => void;
 }) => {
   const { summary, source, loading } = useSummary(item.itemId);
+  const { suggestion } = useSuggestion(item.itemId);
   const url = redditUrl(item, subredditName);
   const isAi = source === 'llm' || source === 'cache';
 
@@ -448,6 +530,10 @@ const ItemRow = ({
           </p>
         )}
       </button>
+
+      {!rejectOpen && suggestion && suggestion.action !== 'review' && (
+        <SuggestionChip suggestion={suggestion} />
+      )}
 
       {!rejectOpen && (
         <div className="mt-2.5 space-y-1.5">

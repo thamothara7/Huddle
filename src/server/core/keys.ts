@@ -11,6 +11,7 @@ export const k = {
     `huddle:user:${username}:actions:${subId}`,
   userSnoovatar: (username: string) => `huddle:user:${username}:snoovatar`,
   summary: (itemId: string) => `huddle:summary:${itemId}`,
+  suggestion: (itemId: string) => `huddle:suggestion:${itemId}`,
 };
 
 export const USER_STATS_TTL_SECONDS = 24 * 60 * 60;
