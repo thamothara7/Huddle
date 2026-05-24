@@ -1,14 +1,10 @@
-<div align="center">
+![Huddle logo](https://raw.githubusercontent.com/thamothara7/Huddle/main/public/huddle-logo.svg)
 
-<img src="https://raw.githubusercontent.com/thamothara7/Huddle/main/public/huddle-logo.svg" width="96" height="96" alt="Huddle logo"/>
+# Huddle
 
-<h1>Huddle</h1>
+> Reports cluster by user. A factual one-sentence summary appears on every queue item. One click reveals the underlying context — without leaving Reddit.
 
-<em>Reports cluster by user. A factual one-sentence summary appears on every queue item. One click reveals the underlying context — without leaving Reddit.</em>
-
-<p>Built for the <strong>Reddit Mod Tools and Migrated Apps Hackathon</strong> — submission category: Best New Mod Tool.</p>
-
-</div>
+Built for the **Reddit Mod Tools and Migrated Apps Hackathon** — submission category: Best New Mod Tool.
 
 ---
 
