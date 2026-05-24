@@ -1,18 +1,41 @@
+export type QueueItem = {
+  itemId: string;
+  type: 'post' | 'comment';
+  subId: string;
+  authorId: string;
+  authorName: string;
+  parentPostId?: string;
+  title?: string;
+  reportReasons: string[];
+  reportCount: number;
+  createdAt: number;
+  status: 'open' | 'actioned';
+  actionedBy?: string;
+  actionTaken?: 'approve' | 'remove' | 'spam';
+};
+
+export type QueueGroup = {
+  groupKey: string;
+  authorId: string;
+  authorName: string;
+  items: QueueItem[];
+};
+
 export type InitResponse = {
   type: 'init';
   postId: string;
-  count: number;
   username: string;
+  groups: QueueGroup[];
 };
 
-export type IncrementResponse = {
-  type: 'increment';
-  postId: string;
-  count: number;
+export type ActionRequest = {
+  itemId: string;
+  action: 'approve' | 'remove';
 };
 
-export type DecrementResponse = {
-  type: 'decrement';
-  postId: string;
-  count: number;
+export type ActionResponse = {
+  type: 'action';
+  itemId: string;
+  action: 'approve' | 'remove';
+  ok: boolean;
 };

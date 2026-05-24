@@ -8,10 +8,36 @@ import type {
   OnPostSubmitRequest,
   TriggerResponse,
 } from '@devvit/web/shared';
-import { context } from '@devvit/web/server';
+import { context, reddit } from '@devvit/web/server';
 import { createPost } from '../core/post';
+import { getItem, setItem, upsertReport } from '../core/items';
+import { addItemToGroups, removeItemFromAllGroups } from '../core/groups';
+import { isUserId } from '../core/ids';
+import type { QueueItem } from '../../shared/api';
 
 export const triggers = new Hono();
+
+const CLOSING_ACTIONS = new Set([
+  'approvelink',
+  'removelink',
+  'spamlink',
+  'approvecomment',
+  'removecomment',
+  'spamcomment',
+]);
+
+const resolveAuthorName = async (
+  authorId: string,
+  fallback: string
+): Promise<string> => {
+  if (!isUserId(authorId)) return fallback;
+  try {
+    const user = await reddit.getUserById(authorId);
+    return user?.username ?? fallback;
+  } catch {
+    return fallback;
+  }
+};
 
 triggers.post('/on-app-install', async (c) => {
   try {
@@ -35,32 +61,99 @@ triggers.post('/on-app-install', async (c) => {
 
 triggers.post('/on-post-report', async (c) => {
   const input = await c.req.json<OnPostReportRequest>();
-  console.log(`[huddle] PostReport on ${input.post?.id} reason=${input.reason ?? '(none)'}`);
+  const post = input.post;
+  const subId = context.subredditId;
+  if (!post?.id || !post.authorId || !subId) {
+    return c.json<TriggerResponse>({}, 200);
+  }
+  const now = Date.now();
+  const item = await upsertReport(
+    post.id,
+    () => ({
+      itemId: post.id,
+      type: 'post',
+      subId,
+      authorId: post.authorId,
+      authorName: post.authorId,
+      title: post.title,
+      reportReasons: [],
+      reportCount: 1,
+      createdAt: now,
+      status: 'open',
+    }),
+    input.reason
+  );
+  if (item.authorName === item.authorId) {
+    item.authorName = await resolveAuthorName(item.authorId, item.authorId);
+    await setItem(item);
+  }
+  await addItemToGroups(subId, item.itemId, item.authorId, now);
   return c.json<TriggerResponse>({}, 200);
 });
 
 triggers.post('/on-comment-report', async (c) => {
   const input = await c.req.json<OnCommentReportRequest>();
-  console.log(`[huddle] CommentReport on ${input.comment?.id} reason=${input.reason ?? '(none)'}`);
+  const comment = input.comment;
+  const subId = context.subredditId;
+  if (!comment?.id || !subId) {
+    return c.json<TriggerResponse>({}, 200);
+  }
+  const authorName = comment.author || 'unknown';
+  const now = Date.now();
+  const item = await upsertReport(
+    comment.id,
+    () => ({
+      itemId: comment.id,
+      type: 'comment',
+      subId,
+      authorId: authorName,
+      authorName,
+      parentPostId: comment.postId,
+      reportReasons: [],
+      reportCount: 1,
+      createdAt: now,
+      status: 'open',
+    }),
+    input.reason
+  );
+  await addItemToGroups(subId, item.itemId, item.authorId, now);
   return c.json<TriggerResponse>({}, 200);
 });
 
 triggers.post('/on-mod-action', async (c) => {
   const input = await c.req.json<OnModActionRequest>();
-  console.log(
-    `[huddle] ModAction ${input.action} on ${input.targetPost?.id ?? input.targetComment?.id ?? '?'}`
-  );
+  const action = input.action ?? '';
+  if (!CLOSING_ACTIONS.has(action)) {
+    return c.json<TriggerResponse>({}, 200);
+  }
+  const targetId = input.targetPost?.id ?? input.targetComment?.id;
+  if (!targetId) return c.json<TriggerResponse>({}, 200);
+
+  const existing = await getItem(targetId);
+  if (!existing || existing.status !== 'open') {
+    return c.json<TriggerResponse>({}, 200);
+  }
+  const updated: QueueItem = {
+    ...existing,
+    status: 'actioned',
+    actionedBy: input.moderator?.name,
+    actionTaken: action.startsWith('approve')
+      ? 'approve'
+      : action.startsWith('spam')
+        ? 'spam'
+        : 'remove',
+  };
+  await setItem(updated);
+  await removeItemFromAllGroups(updated.subId, updated.itemId);
   return c.json<TriggerResponse>({}, 200);
 });
 
 triggers.post('/on-post-submit', async (c) => {
-  const input = await c.req.json<OnPostSubmitRequest>();
-  console.log(`[huddle] PostSubmit ${input.post?.id} by ${input.author?.name}`);
+  await c.req.json<OnPostSubmitRequest>();
   return c.json<TriggerResponse>({}, 200);
 });
 
 triggers.post('/on-comment-submit', async (c) => {
-  const input = await c.req.json<OnCommentSubmitRequest>();
-  console.log(`[huddle] CommentSubmit ${input.comment?.id} by ${input.author?.name}`);
+  await c.req.json<OnCommentSubmitRequest>();
   return c.json<TriggerResponse>({}, 200);
 });

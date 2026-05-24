@@ -15,14 +15,13 @@ export const Splash = () => {
       />
       <div className="flex flex-col items-center gap-2">
         <h1 className="text-2xl font-bold text-center text-gray-900 dark:text-white">
-          Hey {context.username ?? 'user'} 👋
+          Huddle
         </h1>
         <p className="text-base text-center text-gray-600 dark:text-gray-300">
-          Edit{' '}
-          <span className="bg-[#e5ebee] dark:bg-gray-700 px-1 py-0.5 rounded">
-            src/client/splash.tsx
-          </span>{' '}
-          to get started.
+          The modqueue, with intelligence.
+        </p>
+        <p className="text-sm text-center text-gray-500 dark:text-gray-400">
+          Hey {context.username ?? 'mod'} — open the queue to see grouped reports.
         </p>
       </div>
       <div className="flex items-center justify-center mt-5">
@@ -30,7 +29,7 @@ export const Splash = () => {
           className="flex items-center justify-center bg-[#d93900] dark:bg-orange-600 text-white w-auto h-10 rounded-full cursor-pointer transition-colors px-4 hover:bg-[#c23300] dark:hover:bg-orange-700"
           onClick={(e) => requestExpandedMode(e.nativeEvent, 'game')}
         >
-          Tap to Start
+          Open queue
         </button>
       </div>
       <footer className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-3 text-[0.8em] text-gray-600 dark:text-gray-400">
