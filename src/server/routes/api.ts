@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 import { context, reddit, redis } from '@devvit/web/server';
 import { fetchGroupedQueue } from '../core/queue';
-import { getItem, setItem } from '../core/items';
-import { removeItemFromAllGroups } from '../core/groups';
-import { isThingId } from '../core/ids';
+import { getItem, getItems, setItem } from '../core/items';
+import { listOpenItemIds, removeItemFromAllGroups } from '../core/groups';
+import { isThingId, isUserId } from '../core/ids';
 import { computeUserFacts } from '../core/ai/facts';
 import { generateRemovalReason } from '../core/ai/reason';
 import { getOrGenerateSummary } from '../core/ai/summary';
@@ -455,10 +455,30 @@ api.post('/reject-with-reason', async (c) => {
 
 const VALID_USER_ACTIONS = new Set(['ban', 'unban', 'mute', 'unmute']);
 
+// reddit.banUser / muteUser expect a username (string like 'karthikvelan1'),
+// not a t2_ thing-id. Early in an item's life its authorName is stored as
+// the t2_ fallback until we can resolve the real handle, so the drawer can
+// end up sending us the id. Look it up via getUserById and return the
+// canonical username.
+const resolveUsername = async (raw: string): Promise<string | null> => {
+  if (!raw) return null;
+  if (!isUserId(raw)) return raw; // already a username
+  try {
+    const user = await reddit.getUserById(raw);
+    return user?.username ?? null;
+  } catch (err) {
+    console.error(
+      `[huddle] resolveUsername(${raw}) failed:`,
+      err instanceof Error ? err.message : err
+    );
+    return null;
+  }
+};
+
 api.post('/user-action', async (c) => {
   const body = await c.req.json<UserActionRequest>();
-  const subredditName = context.subredditName;
-  if (!body.username || !subredditName) {
+  const { subredditName, subredditId } = context;
+  if (!body.username || !subredditName || !subredditId) {
     return c.json<ErrorResponse>(
       { status: 'error', message: 'missing username or subreddit context' },
       400
@@ -470,43 +490,60 @@ api.post('/user-action', async (c) => {
       400
     );
   }
+  const username = await resolveUsername(body.username);
+  if (!username) {
+    return c.json<ErrorResponse>(
+      {
+        status: 'error',
+        message: `could not resolve username from "${body.username}"`,
+      },
+      400
+    );
+  }
   const reason = body.reason || 'Actioned via Huddle';
+  let removedItems: number | undefined;
   try {
     switch (body.action) {
       case 'ban':
         await reddit.banUser({
-          username: body.username,
+          username,
           subredditName,
           reason,
           note: 'Banned via Huddle',
         });
+        // Cascade-remove every queued item this user authored — banning
+        // implies their reported content shouldn't sit in the queue
+        // anymore. We compare against item.authorName so this catches both
+        // post groups (keyed by t2_) and comment groups (keyed by username).
+        removedItems = await cascadeRemoveByAuthor(subredditId, username);
         break;
       case 'unban':
-        await reddit.unbanUser(body.username, subredditName);
+        await reddit.unbanUser(username, subredditName);
         break;
       case 'mute':
         await reddit.muteUser({
-          username: body.username,
+          username,
           subredditName,
           note: 'Muted via Huddle',
         });
         break;
       case 'unmute':
-        await reddit.unmuteUser(body.username, subredditName);
+        await reddit.unmuteUser(username, subredditName);
         break;
     }
     console.log(
-      `[huddle] /api/user-action ${body.action} u/${body.username} ok`
+      `[huddle] /api/user-action ${body.action} u/${username} ok${typeof removedItems === 'number' ? ` (cascade-removed ${removedItems} items)` : ''}`
     );
     return c.json<UserActionResponse>({
       type: 'user-action',
-      username: body.username,
+      username,
       action: body.action,
       ok: true,
+      removedItems,
     });
   } catch (error) {
     console.error(
-      `[huddle] /api/user-action ${body.action} u/${body.username} failed:`,
+      `[huddle] /api/user-action ${body.action} u/${username} failed:`,
       error instanceof Error ? error.message : error
     );
     return c.json<ErrorResponse>(
@@ -518,3 +555,42 @@ api.post('/user-action', async (c) => {
     );
   }
 });
+
+// Helper: after a ban, sweep every open queue item authored by this user.
+// Returns the count of successful removals so the client can show
+// 'Banned · cleaned up N items'. Failures on individual items are logged
+// but don't fail the whole sweep.
+const cascadeRemoveByAuthor = async (
+  subredditId: string,
+  username: string
+): Promise<number> => {
+  const ids = await listOpenItemIds(subredditId);
+  if (ids.length === 0) return 0;
+  const items = await getItems(ids);
+  const userItems = items.filter(
+    (i) => i.status === 'open' && i.authorName === username
+  );
+  let removed = 0;
+  const actorName = (await reddit.getCurrentUsername()) ?? undefined;
+  for (const item of userItems) {
+    try {
+      if (isThingId(item.itemId)) {
+        await reddit.remove(item.itemId, false);
+      }
+      await setItem({
+        ...item,
+        status: 'actioned',
+        actionedBy: actorName,
+        actionTaken: 'remove',
+      });
+      await removeItemFromAllGroups(item.subId, item.itemId);
+      removed += 1;
+    } catch (err) {
+      console.error(
+        `[huddle] cascadeRemove ${item.itemId} for u/${username} failed:`,
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+  return removed;
+};

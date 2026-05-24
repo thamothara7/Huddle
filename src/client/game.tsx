@@ -955,10 +955,12 @@ const ContextPeekDrawer = ({
   item,
   subredditName,
   onClose,
+  onBanned,
 }: {
   item: QueueItem;
   subredditName: string;
   onClose: () => void;
+  onBanned: () => void;
 }) => {
   const itemId = item.itemId;
   const url = redditUrl(item, subredditName);
@@ -970,6 +972,7 @@ const ContextPeekDrawer = ({
   const [banBusy, setBanBusy] = useState(false);
   const [banError, setBanError] = useState<string | null>(null);
   const [banned, setBanned] = useState(false);
+  const [removedItems, setRemovedItems] = useState<number | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -1029,6 +1032,10 @@ const ContextPeekDrawer = ({
       const data: UserActionResponse = await res.json();
       if (!data.ok) throw new Error('ban returned not-ok');
       setBanned(true);
+      setRemovedItems(data.removedItems ?? null);
+      // Signal parent so the queue refreshes — items by this user are now
+      // gone from Reddit + Redis, and the user is banned from the sub.
+      onBanned();
     } catch (err) {
       setBanError(err instanceof Error ? err.message : 'ban failed');
     } finally {
@@ -1087,6 +1094,12 @@ const ContextPeekDrawer = ({
             {banned ? (
               <span className="text-rose-700 dark:text-rose-300 font-semibold">
                 Banned
+                {typeof removedItems === 'number' && removedItems > 0 && (
+                  <span className="ml-1 font-normal text-rose-600/80 dark:text-rose-300/70">
+                    · cleaned up {removedItems} item
+                    {removedItems === 1 ? '' : 's'}
+                  </span>
+                )}
               </span>
             ) : (
               <button
@@ -1319,6 +1332,7 @@ const App = () => {
           item={drawerItem}
           subredditName={subredditName}
           onClose={() => setDrawerItem(null)}
+          onBanned={() => void refresh()}
         />
       )}
     </div>

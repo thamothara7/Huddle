@@ -80,6 +80,8 @@ export type UserActionResponse = {
   username: string;
   action: UserActionKind;
   ok: boolean;
+  /** For action='ban': how many queued items by this user were removed. */
+  removedItems?: number;
 };
 
 export type SuggestReasonResponse = {
