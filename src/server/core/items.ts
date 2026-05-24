@@ -33,6 +33,16 @@ export const upsertReport = async (
     if (reason && !existing.reportReasons.includes(reason)) {
       existing.reportReasons.push(reason);
     }
+    // If a mod previously actioned this item and it's now being reported
+    // again, reopen it for review — fetchGroupedQueue filters by
+    // status === 'open', so without this reset a re-reported item would
+    // be silently dropped from the queue. Clear the prior action
+    // metadata since the next mod decision is independent.
+    if (existing.status === 'actioned') {
+      existing.status = 'open';
+      existing.actionedBy = undefined;
+      existing.actionTaken = undefined;
+    }
     await setItem(existing);
     return existing;
   }
