@@ -45,11 +45,12 @@
     "onCommentSubmit": "/internal/triggers/on-comment-submit"
   },
   "settings": {
-    "subreddit": {
+    "global": {
       "geminiApiKey": {
         "type": "string",
-        "label": "Gemini API key",
-        "helpText": "Free key from https://aistudio.google.com/apikey. Powers the one-sentence AI summaries. Without it, Huddle falls back to raw facts.",
+        "isSecret": true,
+        "label": "Gemini API key (shared across all installs)",
+        "helpText": "Free key from https://aistudio.google.com/apikey. Powers AI summaries for every subreddit using Huddle. Falls back to raw facts if missing or rate-limited.",
         "placeholder": "AIza..."
       }
     }

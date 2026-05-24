@@ -4,7 +4,16 @@ export const k = {
   groupTarget: (subId: string, authorKey: string) =>
     `huddle:groups:${subId}:target:${authorKey}`,
   itemGroups: (itemId: string) => `huddle:item-groups:${itemId}`,
+  userStats: (username: string) => `huddle:user:${username}:stats`,
+  userRecent: (username: string, subId: string) =>
+    `huddle:user:${username}:recent:${subId}`,
+  userActions: (username: string, subId: string) =>
+    `huddle:user:${username}:actions:${subId}`,
+  summary: (itemId: string) => `huddle:summary:${itemId}`,
 };
+
+export const USER_STATS_TTL_SECONDS = 24 * 60 * 60;
+export const USER_RECENT_CAP = 20;
 
 export const targetGroupKey = (authorKey: string) =>
   `target:${authorKey}` as const;

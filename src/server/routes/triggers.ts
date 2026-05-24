@@ -13,6 +13,11 @@ import { createPost } from '../core/post';
 import { getItem, setItem, upsertReport } from '../core/items';
 import { addItemToGroups, removeItemFromAllGroups } from '../core/groups';
 import { isUserId } from '../core/ids';
+import {
+  appendAction,
+  appendRecent,
+  updateRecentStatus,
+} from '../core/history';
 import type { QueueItem } from '../../shared/api';
 
 export const triggers = new Hono();
@@ -129,31 +134,72 @@ triggers.post('/on-mod-action', async (c) => {
   const targetId = input.targetPost?.id ?? input.targetComment?.id;
   if (!targetId) return c.json<TriggerResponse>({}, 200);
 
+  const actionKind: 'approve' | 'remove' | 'spam' = action.startsWith('approve')
+    ? 'approve'
+    : action.startsWith('spam')
+      ? 'spam'
+      : 'remove';
+  const recentStatus =
+    actionKind === 'approve' ? 'approved' : actionKind === 'spam' ? 'spam' : 'removed';
+
   const existing = await getItem(targetId);
-  if (!existing || existing.status !== 'open') {
-    return c.json<TriggerResponse>({}, 200);
+  if (existing) {
+    if (existing.status === 'open') {
+      const updated: QueueItem = {
+        ...existing,
+        status: 'actioned',
+        actionedBy: input.moderator?.name,
+        actionTaken: actionKind,
+      };
+      await setItem(updated);
+      await removeItemFromAllGroups(updated.subId, updated.itemId);
+    }
+    await Promise.all([
+      appendAction(existing.authorName, existing.subId, {
+        action: actionKind,
+        modId: input.moderator?.name ?? 'unknown',
+        itemId: targetId,
+        timestamp: Date.now(),
+      }),
+      updateRecentStatus(existing.authorName, existing.subId, targetId, recentStatus),
+    ]);
   }
-  const updated: QueueItem = {
-    ...existing,
-    status: 'actioned',
-    actionedBy: input.moderator?.name,
-    actionTaken: action.startsWith('approve')
-      ? 'approve'
-      : action.startsWith('spam')
-        ? 'spam'
-        : 'remove',
-  };
-  await setItem(updated);
-  await removeItemFromAllGroups(updated.subId, updated.itemId);
   return c.json<TriggerResponse>({}, 200);
 });
 
 triggers.post('/on-post-submit', async (c) => {
-  await c.req.json<OnPostSubmitRequest>();
+  const input = await c.req.json<OnPostSubmitRequest>();
+  const post = input.post;
+  const author = input.author;
+  const subId = context.subredditId;
+  if (!post?.id || !author?.name || !subId) {
+    return c.json<TriggerResponse>({}, 200);
+  }
+  await appendRecent(author.name, subId, {
+    itemId: post.id,
+    title: post.title ?? '(no title)',
+    status: 'pending',
+    createdAt: Date.now(),
+  });
   return c.json<TriggerResponse>({}, 200);
 });
 
 triggers.post('/on-comment-submit', async (c) => {
-  await c.req.json<OnCommentSubmitRequest>();
+  const input = await c.req.json<OnCommentSubmitRequest>();
+  const comment = input.comment;
+  const author = input.author;
+  const subId = context.subredditId;
+  if (!comment?.id || !author?.name || !subId) {
+    return c.json<TriggerResponse>({}, 200);
+  }
+  const snippet =
+    (comment.body ?? '').slice(0, 80).replace(/\s+/g, ' ').trim() ||
+    '(comment)';
+  await appendRecent(author.name, subId, {
+    itemId: comment.id,
+    title: snippet,
+    status: 'pending',
+    createdAt: Date.now(),
+  });
   return c.json<TriggerResponse>({}, 200);
 });

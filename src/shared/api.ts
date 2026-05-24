@@ -39,3 +39,40 @@ export type ActionResponse = {
   action: 'approve' | 'remove';
   ok: boolean;
 };
+
+export type UserFacts = {
+  accountAgeDays: number;
+  postsInSubTotal: number;
+  commentsInSubTotal: number;
+  inSubLast7d: number;
+  removedInSubTotal: number;
+};
+
+export type SummaryResponse = {
+  type: 'summary';
+  itemId: string;
+  summary: string;
+};
+
+export type RecentEntry = {
+  itemId: string;
+  title: string;
+  status: 'pending' | 'approved' | 'removed' | 'spam';
+  createdAt: number;
+};
+
+export type ActionEntry = {
+  action: 'approve' | 'remove' | 'spam';
+  modId: string;
+  itemId: string;
+  timestamp: number;
+};
+
+export type ContextPeekResponse = {
+  type: 'context-peek';
+  itemId: string;
+  authorName: string;
+  facts: UserFacts;
+  recent: RecentEntry[];
+  actions: ActionEntry[];
+};

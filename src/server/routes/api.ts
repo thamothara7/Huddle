@@ -4,10 +4,15 @@ import { fetchGroupedQueue } from '../core/queue';
 import { getItem, setItem } from '../core/items';
 import { removeItemFromAllGroups } from '../core/groups';
 import { isThingId } from '../core/ids';
+import { computeUserFacts } from '../core/ai/facts';
+import { getOrGenerateSummary } from '../core/ai/summary';
+import { getActionTimeline, getRecentTitles } from '../core/history';
 import type {
   ActionRequest,
   ActionResponse,
+  ContextPeekResponse,
   InitResponse,
+  SummaryResponse,
 } from '../../shared/api';
 
 type ErrorResponse = { status: 'error'; message: string };
@@ -31,6 +36,58 @@ api.get('/init', async (c) => {
     postId,
     username: username ?? 'anonymous',
     groups,
+  });
+});
+
+api.get('/summary', async (c) => {
+  const { subredditId } = context;
+  const itemId = c.req.query('itemId');
+  if (!itemId || !subredditId) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: 'missing itemId or context' },
+      400
+    );
+  }
+  const item = await getItem(itemId);
+  if (!item) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: `item ${itemId} not found` },
+      404
+    );
+  }
+  const facts = await computeUserFacts(item.authorName, subredditId);
+  const summary = await getOrGenerateSummary(itemId, facts);
+  return c.json<SummaryResponse>({ type: 'summary', itemId, summary });
+});
+
+api.get('/context-peek', async (c) => {
+  const { subredditId } = context;
+  const itemId = c.req.query('itemId');
+  if (!itemId || !subredditId) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: 'missing itemId or context' },
+      400
+    );
+  }
+  const item = await getItem(itemId);
+  if (!item) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: `item ${itemId} not found` },
+      404
+    );
+  }
+  const [facts, recent, actions] = await Promise.all([
+    computeUserFacts(item.authorName, subredditId),
+    getRecentTitles(item.authorName, subredditId, 5),
+    getActionTimeline(item.authorName, subredditId),
+  ]);
+  return c.json<ContextPeekResponse>({
+    type: 'context-peek',
+    itemId,
+    authorName: item.authorName,
+    facts,
+    recent,
+    actions,
   });
 });
 

@@ -3,10 +3,15 @@ import './index.css';
 import { StrictMode, useCallback, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type {
+  ActionEntry,
   ActionResponse,
+  ContextPeekResponse,
   InitResponse,
   QueueGroup,
   QueueItem,
+  RecentEntry,
+  SummaryResponse,
+  UserFacts,
 } from '../shared/api';
 
 const POLL_MS = 5000;
@@ -41,50 +46,91 @@ const useQueue = () => {
   return { groups, loading, error, refresh };
 };
 
+const useSummary = (itemId: string) => {
+  const [summary, setSummary] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    fetch(`/api/summary?itemId=${encodeURIComponent(itemId)}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+      .then((data: SummaryResponse) => {
+        if (alive) setSummary(data.summary);
+      })
+      .catch(() => {
+        if (alive) setSummary(null);
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [itemId]);
+
+  return { summary, loading };
+};
+
 const ItemRow = ({
   item,
   busy,
   onAction,
+  onOpenDrawer,
 }: {
   item: QueueItem;
   busy: boolean;
   onAction: (a: 'approve' | 'remove') => void;
-}) => (
-  <li className="p-3 flex justify-between items-start gap-3 text-sm border-t border-gray-100 dark:border-gray-800">
-    <div className="flex-1 min-w-0">
-      <div className="font-mono text-[10px] uppercase tracking-wide text-gray-500">
-        {item.type} · {item.itemId}
-      </div>
-      {item.title && (
-        <div className="text-gray-900 dark:text-gray-100 truncate">
-          {item.title}
+  onOpenDrawer: () => void;
+}) => {
+  const { summary, loading } = useSummary(item.itemId);
+  return (
+    <li className="p-3 flex justify-between items-start gap-3 text-sm border-t border-gray-100 dark:border-gray-800">
+      <button
+        onClick={onOpenDrawer}
+        className="flex-1 min-w-0 text-left hover:bg-gray-50 dark:hover:bg-gray-800 -m-1 p-1 rounded transition-colors"
+      >
+        <div className="font-mono text-[10px] uppercase tracking-wide text-gray-500">
+          {item.type} · {item.itemId}
         </div>
-      )}
-      <div className="text-gray-600 dark:text-gray-400 text-xs mt-0.5">
-        {item.reportReasons.length > 0
-          ? item.reportReasons.join(' · ')
-          : '(no reason given)'}
-        {item.reportCount > 1 ? ` · ${item.reportCount} reports` : ''}
+        {item.title && (
+          <div className="text-gray-900 dark:text-gray-100 truncate">
+            {item.title}
+          </div>
+        )}
+        <div className="text-gray-700 dark:text-gray-300 text-xs mt-1 leading-snug">
+          {loading ? (
+            <span className="inline-block animate-pulse bg-gray-200 dark:bg-gray-700 h-3 w-48 rounded" />
+          ) : (
+            summary ?? '(summary unavailable)'
+          )}
+        </div>
+        <div className="text-gray-500 text-[11px] mt-0.5">
+          {item.reportReasons.length > 0
+            ? item.reportReasons.join(' · ')
+            : '(no reason given)'}
+          {item.reportCount > 1 ? ` · ${item.reportCount} reports` : ''}
+        </div>
+      </button>
+      <div className="flex gap-2 shrink-0">
+        <button
+          disabled={busy}
+          onClick={() => onAction('approve')}
+          className="px-2 py-1 rounded bg-green-100 hover:bg-green-200 text-green-800 disabled:opacity-50 text-xs"
+        >
+          Approve
+        </button>
+        <button
+          disabled={busy}
+          onClick={() => onAction('remove')}
+          className="px-2 py-1 rounded bg-red-100 hover:bg-red-200 text-red-800 disabled:opacity-50 text-xs"
+        >
+          Remove
+        </button>
       </div>
-    </div>
-    <div className="flex gap-2 shrink-0">
-      <button
-        disabled={busy}
-        onClick={() => onAction('approve')}
-        className="px-2 py-1 rounded bg-green-100 hover:bg-green-200 text-green-800 disabled:opacity-50 text-xs"
-      >
-        Approve
-      </button>
-      <button
-        disabled={busy}
-        onClick={() => onAction('remove')}
-        className="px-2 py-1 rounded bg-red-100 hover:bg-red-200 text-red-800 disabled:opacity-50 text-xs"
-      >
-        Remove
-      </button>
-    </div>
-  </li>
-);
+    </li>
+  );
+};
 
 const Group = ({
   group,
@@ -92,12 +138,14 @@ const Group = ({
   onToggle,
   busy,
   onAction,
+  onOpenDrawer,
 }: {
   group: QueueGroup;
   expanded: boolean;
   onToggle: () => void;
   busy: string | null;
   onAction: (itemId: string, a: 'approve' | 'remove') => void;
+  onOpenDrawer: (itemId: string) => void;
 }) => (
   <li className="border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
     <button
@@ -118,6 +166,7 @@ const Group = ({
             item={item}
             busy={busy === item.itemId}
             onAction={(a) => onAction(item.itemId, a)}
+            onOpenDrawer={() => onOpenDrawer(item.itemId)}
           />
         ))}
       </ul>
@@ -125,11 +174,203 @@ const Group = ({
   </li>
 );
 
+const FactsTable = ({ facts }: { facts: UserFacts }) => {
+  const rows: Array<[string, string]> = [
+    ['Account age', `${facts.accountAgeDays} day${facts.accountAgeDays === 1 ? '' : 's'}`],
+    ['Posts in sub', String(facts.postsInSubTotal)],
+    ['Comments in sub', String(facts.commentsInSubTotal)],
+    ['Active last 7d', String(facts.inSubLast7d)],
+    ['Removed in sub', String(facts.removedInSubTotal)],
+  ];
+  return (
+    <table className="w-full text-xs">
+      <tbody>
+        {rows.map(([k, v]) => (
+          <tr key={k} className="border-b border-gray-100 dark:border-gray-800">
+            <td className="py-1 pr-2 text-gray-500">{k}</td>
+            <td className="py-1 font-mono text-right">{v}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+};
+
+const STATUS_BADGE: Record<RecentEntry['status'], { label: string; cls: string }> = {
+  approved: { label: '✓', cls: 'bg-green-100 text-green-800' },
+  removed: { label: '✗', cls: 'bg-red-100 text-red-800' },
+  spam: { label: 'spam', cls: 'bg-gray-800 text-white' },
+  pending: { label: '⏳', cls: 'bg-yellow-100 text-yellow-800' },
+};
+
+const RecentList = ({ recent }: { recent: RecentEntry[] }) => {
+  if (recent.length === 0) {
+    return (
+      <p className="text-xs text-gray-500 italic">No recent activity tracked yet.</p>
+    );
+  }
+  return (
+    <ul className="space-y-1.5">
+      {recent.map((r) => {
+        const badge = STATUS_BADGE[r.status];
+        return (
+          <li key={r.itemId} className="flex items-start gap-2 text-xs">
+            <span
+              className={`shrink-0 px-1.5 py-0.5 rounded font-mono text-[10px] ${badge.cls}`}
+            >
+              {badge.label}
+            </span>
+            <span className="text-gray-700 dark:text-gray-300 truncate">
+              {r.title}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+};
+
+const ACTION_COLORS: Record<ActionEntry['action'], string> = {
+  approve: 'bg-green-500',
+  remove: 'bg-red-500',
+  spam: 'bg-gray-900',
+};
+
+const Timeline = ({ actions }: { actions: ActionEntry[] }) => {
+  if (actions.length === 0) {
+    return (
+      <p className="text-xs text-gray-500 italic">No mod actions in the last 30 days.</p>
+    );
+  }
+  const now = Date.now();
+  const windowMs = 30 * 24 * 60 * 60 * 1000;
+  return (
+    <div>
+      <div className="relative h-6 bg-gray-100 dark:bg-gray-800 rounded">
+        {actions.map((a, idx) => {
+          const ageMs = now - a.timestamp;
+          const pct = Math.max(
+            0,
+            Math.min(100, ((windowMs - ageMs) / windowMs) * 100)
+          );
+          const yJitter = (idx % 3) * 4;
+          return (
+            <div
+              key={`${a.itemId}-${a.timestamp}`}
+              title={`${a.action} by ${a.modId} · ${new Date(a.timestamp).toLocaleDateString()}`}
+              className={`absolute w-1.5 h-1.5 rounded-full ${ACTION_COLORS[a.action]}`}
+              style={{
+                left: `${pct}%`,
+                top: `${8 + yJitter}px`,
+                transform: 'translateX(-50%)',
+              }}
+            />
+          );
+        })}
+      </div>
+      <div className="flex justify-between text-[10px] text-gray-500 mt-1">
+        <span>30d ago</span>
+        <span>today</span>
+      </div>
+    </div>
+  );
+};
+
+const ContextPeekDrawer = ({
+  itemId,
+  onClose,
+}: {
+  itemId: string;
+  onClose: () => void;
+}) => {
+  const [data, setData] = useState<ContextPeekResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    setData(null);
+    setError(null);
+    fetch(`/api/context-peek?itemId=${encodeURIComponent(itemId)}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+      .then((d: ContextPeekResponse) => {
+        if (alive) setData(d);
+      })
+      .catch((e) => {
+        if (alive)
+          setError(e instanceof Error ? e.message : 'Failed to load context');
+      });
+    return () => {
+      alive = false;
+    };
+  }, [itemId]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      <div className="flex-1 bg-black/30" onClick={onClose} />
+      <aside className="w-[360px] max-w-full bg-white dark:bg-gray-900 shadow-xl overflow-y-auto">
+        <header className="p-3 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center sticky top-0 bg-white dark:bg-gray-900">
+          <div>
+            <h2 className="font-semibold text-sm">
+              Context · u/{data?.authorName ?? '…'}
+            </h2>
+            <p className="text-[10px] text-gray-500 font-mono">{itemId}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-900 dark:hover:text-white text-lg leading-none"
+          >
+            ×
+          </button>
+        </header>
+        <div className="p-3 space-y-4">
+          {error && (
+            <p className="text-xs text-red-700 dark:text-red-300">{error}</p>
+          )}
+          {!data && !error && (
+            <p className="text-xs text-gray-500">Loading context…</p>
+          )}
+          {data && (
+            <>
+              <section>
+                <h3 className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">
+                  Facts the AI saw
+                </h3>
+                <FactsTable facts={data.facts} />
+              </section>
+              <section>
+                <h3 className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">
+                  Last 5 in this sub
+                </h3>
+                <RecentList recent={data.recent} />
+              </section>
+              <section>
+                <h3 className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">
+                  30-day mod-action timeline
+                </h3>
+                <Timeline actions={data.actions} />
+              </section>
+            </>
+          )}
+        </div>
+      </aside>
+    </div>
+  );
+};
+
 const App = () => {
   const { groups, loading, error, refresh } = useQueue();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [drawerItemId, setDrawerItemId] = useState<string | null>(null);
 
   useEffect(() => {
     if (groups.length === 1) {
@@ -157,6 +398,7 @@ const App = () => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: ActionResponse = await res.json();
       if (!data.ok) throw new Error('action returned not-ok');
+      if (drawerItemId === itemId) setDrawerItemId(null);
       await refresh();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
@@ -200,10 +442,18 @@ const App = () => {
               onToggle={() => toggle(g.groupKey)}
               busy={busy}
               onAction={act}
+              onOpenDrawer={setDrawerItemId}
             />
           ))}
         </ul>
       </div>
+
+      {drawerItemId && (
+        <ContextPeekDrawer
+          itemId={drawerItemId}
+          onClose={() => setDrawerItemId(null)}
+        />
+      )}
     </div>
   );
 };
