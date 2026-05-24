@@ -1,4 +1,4 @@
-![Huddle logo](https://raw.githubusercontent.com/thamothara7/Huddle/main/public/huddle-logo.svg)
+<img src="https://raw.githubusercontent.com/thamothara7/Huddle/main/public/huddle-logo.svg" width="96" height="96" alt="Huddle logo"/>
 
 # Huddle
 
