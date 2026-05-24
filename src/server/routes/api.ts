@@ -61,6 +61,9 @@ api.get('/summary', async (c) => {
   }
   const facts = await computeUserFacts(item.authorName, subredditId);
   const result = await getOrGenerateSummary(itemId, facts);
+  console.log(
+    `[huddle] /api/summary itemId=${itemId} source=${result.source} len=${result.text.length} preview=${JSON.stringify(result.text.slice(0, 80))}`
+  );
   return c.json<SummaryResponse>({
     type: 'summary',
     itemId,

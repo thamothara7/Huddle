@@ -140,23 +140,25 @@ const ItemRow = ({
             {item.title}
           </div>
         )}
-        <div className="text-gray-700 dark:text-gray-300 text-xs mt-1 leading-snug flex items-baseline gap-1.5">
-          {sourceChip && !loading && (
-            <span
-              className={`shrink-0 px-1 py-0.5 rounded text-[9px] font-mono uppercase tracking-wide ${sourceChip.cls}`}
-            >
-              {sourceChip.label}
-            </span>
+        <div className="text-gray-700 dark:text-gray-300 text-xs mt-1 leading-snug">
+          {loading ? (
+            <span className="inline-block animate-pulse bg-gray-200 dark:bg-gray-700 h-3 w-48 rounded align-middle" />
+          ) : (
+            <>
+              {sourceChip && (
+                <span
+                  className={`inline-block px-1 py-0.5 rounded text-[9px] font-mono uppercase tracking-wide mr-1.5 align-middle ${sourceChip.cls}`}
+                >
+                  {sourceChip.label}
+                </span>
+              )}
+              <span className="align-middle">
+                {summary && summary.trim().length > 0
+                  ? summary
+                  : `(empty summary — source=${source ?? 'none'})`}
+              </span>
+            </>
           )}
-          <span className="min-w-0 truncate">
-            {loading ? (
-              <span className="inline-block animate-pulse bg-gray-200 dark:bg-gray-700 h-3 w-48 rounded align-middle" />
-            ) : summary && summary.length > 0 ? (
-              summary
-            ) : (
-              <span className="italic text-gray-500">(summary unavailable)</span>
-            )}
-          </span>
         </div>
         <div className="text-gray-500 text-[11px] mt-0.5">
           Reports:{' '}
