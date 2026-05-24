@@ -39,6 +39,91 @@ export type SuggestionContext = {
   priorRemovals: number;
 };
 
+// Conservative rule-based fallback used whenever the LLM is unavailable
+// (no key, rate-limited, network error, safety block). Mirrors the LLM's
+// constraints: only cites fact-dict fields, never uses judgment language,
+// defaults to 'review' when uncertain.
+const computeHeuristicSuggestion = (ctx: SuggestionContext): ModSuggestion => {
+  const userReports = ctx.userReportReasons.length;
+  const modReports = ctx.modReportReasons.length;
+  const totalReports = userReports + modReports;
+  const veryNewAccount = ctx.accountAgeDays > 0 && ctx.accountAgeDays < 7;
+  const youngAccount = ctx.accountAgeDays > 0 && ctx.accountAgeDays < 30;
+  const oldAccount = ctx.accountAgeDays > 365;
+  const hasPriorRemovals = ctx.priorRemovals > 0;
+  const manyPriorRemovals = ctx.priorRemovals >= 3;
+
+  // Spam: very new account + multiple prior removals + any report
+  if (veryNewAccount && manyPriorRemovals && totalReports >= 1) {
+    return {
+      action: 'spam',
+      confidence: 'medium',
+      why: `Account ${ctx.accountAgeDays} days old with ${ctx.priorRemovals} prior removals in this sub.`,
+    };
+  }
+
+  // Remove: mod-reported AND (young account OR prior removals)
+  if (modReports > 0 && (youngAccount || hasPriorRemovals)) {
+    const ageNote = youngAccount
+      ? ` account ${ctx.accountAgeDays} days old`
+      : '';
+    const removalNote = hasPriorRemovals
+      ? `${ageNote ? ',' : ''} ${ctx.priorRemovals} prior removal${ctx.priorRemovals === 1 ? '' : 's'}`
+      : '';
+    return {
+      action: 'remove',
+      confidence: hasPriorRemovals && youngAccount ? 'high' : 'medium',
+      why: `Mod-reported;${ageNote}${removalNote}.`.trim(),
+    };
+  }
+
+  // Remove: many prior removals on their own
+  if (manyPriorRemovals) {
+    return {
+      action: 'remove',
+      confidence: 'medium',
+      why: `${ctx.priorRemovals} prior removals in this subreddit.`,
+    };
+  }
+
+  // Approve: long-established + clean + minimal report
+  if (
+    oldAccount &&
+    !hasPriorRemovals &&
+    modReports === 0 &&
+    userReports <= 1
+  ) {
+    return {
+      action: 'approve',
+      confidence: 'low',
+      why: `Account ${Math.round(ctx.accountAgeDays / 365)} year(s) old with no prior removals in this sub.`,
+    };
+  }
+
+  return {
+    action: 'review',
+    confidence: 'low',
+    why: 'Insufficient signals — manual review recommended.',
+  };
+};
+
+const writeSuggestionToCache = async (
+  itemId: string,
+  suggestion: ModSuggestion,
+  ttlSeconds: number
+): Promise<void> => {
+  try {
+    await redis.set(k.suggestion(itemId), JSON.stringify(suggestion), {
+      expiration: new Date(Date.now() + ttlSeconds * 1000),
+    });
+  } catch (err) {
+    console.error(
+      `[huddle] suggestion[${itemId}] cache write failed:`,
+      err instanceof Error ? err.message : err
+    );
+  }
+};
+
 export const getOrGenerateSuggestion = async (
   itemId: string,
   ctx: SuggestionContext
@@ -56,8 +141,12 @@ export const getOrGenerateSuggestion = async (
 
   const apiKey = await readKey();
   if (!apiKey) {
-    console.warn(`[huddle] suggestion[${itemId}] no Gemini key`);
-    return null;
+    console.warn(
+      `[huddle] suggestion[${itemId}] no Gemini key — using heuristic fallback`
+    );
+    const heuristic = computeHeuristicSuggestion(ctx);
+    await writeSuggestionToCache(itemId, heuristic, 60 * 60); // 1h
+    return heuristic;
   }
 
   const factDict = {
@@ -112,10 +201,12 @@ export const getOrGenerateSuggestion = async (
     });
   } catch (err) {
     console.error(
-      `[huddle] suggestion[${itemId}] fetch threw:`,
+      `[huddle] suggestion[${itemId}] fetch threw — using heuristic fallback:`,
       err instanceof Error ? err.message : err
     );
-    return null;
+    const heuristic = computeHeuristicSuggestion(ctx);
+    await writeSuggestionToCache(itemId, heuristic, 60 * 60);
+    return heuristic;
   }
 
   if (!response.ok) {
@@ -125,8 +216,16 @@ export const getOrGenerateSuggestion = async (
     } catch {
       // ignore
     }
-    console.warn(`[huddle] suggestion[${itemId}] gemini ${response.status} — ${body}`);
-    return null;
+    console.warn(
+      `[huddle] suggestion[${itemId}] gemini ${response.status} — using heuristic fallback. body=${body}`
+    );
+    const heuristic = computeHeuristicSuggestion(ctx);
+    // Shorter TTL on rate-limit fallbacks so we retry the LLM sooner once
+    // quota resets. For 429 specifically Gemini's free tier resets per day
+    // and per minute — 30 minutes is a reasonable middle ground.
+    const ttl = response.status === 429 ? 30 * 60 : 60 * 60;
+    await writeSuggestionToCache(itemId, heuristic, ttl);
+    return heuristic;
   }
 
   let raw: string;
@@ -164,20 +263,17 @@ export const getOrGenerateSuggestion = async (
   }
 
   if (!suggestion) {
-    console.warn(`[huddle] suggestion[${itemId}] invalid response shape`);
-    return null;
+    console.warn(
+      `[huddle] suggestion[${itemId}] invalid response shape — using heuristic fallback`
+    );
+    const heuristic = computeHeuristicSuggestion(ctx);
+    await writeSuggestionToCache(itemId, heuristic, 60 * 60);
+    return heuristic;
   }
 
-  try {
-    await redis.set(cacheKey, JSON.stringify(suggestion), {
-      expiration: new Date(Date.now() + 60 * 60 * 1000), // 1 hour TTL
-    });
-  } catch (err) {
-    console.error(
-      `[huddle] suggestion[${itemId}] cache write failed:`,
-      err instanceof Error ? err.message : err
-    );
-  }
+  // Cache LLM-validated suggestions for 24h — fact dict changes slowly
+  // and this minimizes repeated Gemini calls on a busy queue.
+  await writeSuggestionToCache(itemId, suggestion, 24 * 60 * 60);
   console.log(
     `[huddle] suggestion[${itemId}] ok: ${suggestion.action} (${suggestion.confidence})`
   );
