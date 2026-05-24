@@ -57,6 +57,53 @@ const SNOOVATAR_CACHE_MISS = 'none';
 const SNOOVATAR_MISS_TTL_SECONDS = 5 * 60; // re-fetch quickly when API returned nothing
 const SNOOVATAR_HIT_TTL_SECONDS = USER_SNOOVATAR_TTL_SECONDS; // 24h for real URLs
 
+// Devvit's reddit.getSnoovatarUrl ONLY returns the customized snoovatar
+// from reddit.com/avatar — it does not surface the user's general profile
+// icon (default snoo or uploaded image). For accounts that never built a
+// custom snoovatar, that call returns undefined even though every Reddit
+// account has at minimum a default snoo at /user/{name}/about.json's
+// icon_img field. Fetch that as a fallback so every user gets an avatar.
+//
+// reddit.com is implicit in Devvit's http allowlist per the devvit.json
+// schema description ("reddit.com or subdomains should not be included"),
+// so this fetch does not require a domain entry in permissions.http.domains.
+const fetchRedditUserAvatar = async (
+  username: string
+): Promise<string | null> => {
+  try {
+    const res = await fetch(
+      `https://www.reddit.com/user/${encodeURIComponent(username)}/about.json`,
+      { headers: { 'User-Agent': 'huddle-devvit-app/0.1 (avatar fallback)' } }
+    );
+    if (!res.ok) {
+      console.warn(
+        `[huddle] reddit about.json for ${username}: HTTP ${res.status}`
+      );
+      return null;
+    }
+    const json = (await res.json()) as {
+      data?: { snoovatar_img?: string; icon_img?: string };
+    };
+    const snoo = json?.data?.snoovatar_img;
+    const icon = json?.data?.icon_img;
+    // Reddit serializes ampersands as &amp; in JSON sometimes; normalize.
+    const clean = (s: string): string => s.replace(/&amp;/g, '&');
+    if (typeof snoo === 'string' && snoo.startsWith('http')) {
+      return clean(snoo);
+    }
+    if (typeof icon === 'string' && icon.startsWith('http')) {
+      return clean(icon);
+    }
+    return null;
+  } catch (err) {
+    console.error(
+      `[huddle] reddit about.json fetch threw for ${username}:`,
+      err instanceof Error ? err.message : err
+    );
+    return null;
+  }
+};
+
 api.get('/snoovatar', async (c) => {
   const username = c.req.query('username')?.trim();
   const refresh = c.req.query('refresh') === '1';
@@ -90,13 +137,12 @@ api.get('/snoovatar', async (c) => {
   }
 
   let url: string | null = null;
+  let source: 'snoovatar' | 'aboutjson' | 'none' = 'none';
   try {
     const snoo = await reddit.getSnoovatarUrl(username);
-    console.log(
-      `[huddle] /api/snoovatar ${username} getSnoovatarUrl returned: ${typeof snoo}=${snoo === undefined ? 'undefined' : JSON.stringify(snoo).slice(0, 120)}`
-    );
     if (typeof snoo === 'string' && snoo.length > 0) {
       url = snoo;
+      source = 'snoovatar';
     }
   } catch (err) {
     console.error(
@@ -104,10 +150,20 @@ api.get('/snoovatar', async (c) => {
       err instanceof Error ? err.message : err
     );
   }
+  // Devvit's API only knows about customized snoovatars. For everyone else
+  // (including default-snoo users), pull icon_img / snoovatar_img from
+  // Reddit's public /about.json.
+  if (!url) {
+    const fallback = await fetchRedditUserAvatar(username);
+    if (fallback) {
+      url = fallback;
+      source = 'aboutjson';
+    }
+  }
 
   const ttl = url ? SNOOVATAR_HIT_TTL_SECONDS : SNOOVATAR_MISS_TTL_SECONDS;
   console.log(
-    `[huddle] /api/snoovatar ${username} resolved: url=${url ? JSON.stringify(url.slice(0, 100)) : 'NONE'} cacheTtl=${ttl}s`
+    `[huddle] /api/snoovatar ${username} resolved: source=${source} url=${url ? JSON.stringify(url.slice(0, 100)) : 'NONE'} cacheTtl=${ttl}s`
   );
   try {
     await redis.set(cacheKey, url ?? SNOOVATAR_CACHE_MISS, {
