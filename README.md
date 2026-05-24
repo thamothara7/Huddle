@@ -1,10 +1,8 @@
-<p align="center">
-  <img src="public/huddle-logo.svg" width="96" height="96" alt="Huddle logo"/>
-</p>
+![Huddle logo](https://raw.githubusercontent.com/thamothara7/Huddle/main/public/huddle-logo.svg)
 
-<h1 align="center">Huddle</h1>
+# Huddle
 
-<p align="center"><em>Reports cluster by user. A factual one-sentence summary appears on every queue item. One click reveals the underlying context — without leaving Reddit.</em></p>
+> Reports cluster by user. A factual one-sentence summary appears on every queue item. One click reveals the underlying context — without leaving Reddit.
 
 Built for the **Reddit Mod Tools and Migrated Apps Hackathon** — submission category: Best New Mod Tool.
 
@@ -14,13 +12,9 @@ Built for the **Reddit Mod Tools and Migrated Apps Hackathon** — submission ca
 
 Reddit moderators spend hours each week leaving the modqueue just to gather context: checking user history, scrolling parent threads, scanning prior mod logs. Two peer-reviewed papers quantify this:
 
-- **84% of moderators "sometimes, often, or almost always" leave the modqueue to seek additional context** while reviewing reports.[^1]
-- **74.5% of moderators report experiencing a collision** — two mods unknowingly acting on the same item at the same time.[^2]
+- **84% of moderators "sometimes, often, or almost always" leave the modqueue to seek additional context** while reviewing reports. (Bajpai & Chandrasekharan, [*In the Queue*, CHI '26](https://dl.acm.org/doi/10.1145/3772318.3791931). Preprint: [arxiv:2509.07314](https://arxiv.org/abs/2509.07314).)
+- **74.5% of moderators report experiencing a collision** — two mods unknowingly acting on the same item at the same time. (Bajpai & Chandrasekharan, [*Towards a Better Modqueue*, arxiv:2409.16840](https://arxiv.org/abs/2409.16840).)
 - The modqueue UI has not been redesigned since 2008.
-
-[^1]: Bajpai, T., & Chandrasekharan, E. (2026). *In the Queue: Understanding How Reddit Moderators Use the Modqueue.* CHI '26. DOI: [10.1145/3772318.3791931](https://dl.acm.org/doi/10.1145/3772318.3791931). Preprint: <https://arxiv.org/abs/2509.07314>
-
-[^2]: Bajpai, T., & Chandrasekharan, E. (2025). *Towards a Better Modqueue: Designing for Diversity Across Moderator Objectives and Workflows.* arxiv:2409.16840. <https://arxiv.org/abs/2409.16840>
 
 ## What Huddle does
 
@@ -32,23 +26,23 @@ Huddle is a Devvit app that renders a smarter, team-aware modqueue inside a cust
 
 **3. AI-suggested mod action.** A color-coded chip above each item's action buttons recommends **Approve · Remove · Spam** with a confidence level and a one-sentence factual justification — built from the same fact dict the summary uses. The model never sees content; it can decline with `review` when signals are insufficient. When Gemini is rate-limited (free-tier 429s), a deterministic heuristic over the same facts takes over so the chip stays useful.
 
-**4. Context Peek drawer.** Click any item → a right-side drawer shows the exact facts the AI received as a small table, the user's last 5 post/comment titles in this sub with status codes (`ok` / `rm` / `pn` / `sp`), and a 30-day mod-action stacked histogram by day and action type. From the drawer header a mod can **Open on Reddit**, **View profile**, or **Ban user** (with a click-twice confirm). Banning auto-removes every queued item from that user in one sweep. No body content is leaked in the drawer; mods who want full content click **Open** to leave Huddle deliberately.
+**4. Context Peek drawer.** Click any item → a right-side drawer shows the exact facts the AI received as a small table, the user's last 5 post/comment titles in this sub with two-letter status codes (`ok` approved · `rm` removed · `pn` pending · `sp` spam), and a 30-day mod-action stacked histogram by day and action type. From the drawer header a mod can **Open on Reddit**, **View profile**, or **Ban user** (with a click-twice confirm). Banning auto-removes every queued item from that user in one sweep. No body content is leaked in the drawer; mods who want full content click **Open** to leave Huddle deliberately.
 
 **5. Bulk + inline + reject-with-reason actions.** Approve / Remove per item, **Approve all** / **Remove all** at the group level (collapsed view only, with a click-twice confirm), plus **Reject with reason** — an inline panel where the mod types a removal reason (or clicks **Suggest with AI** to have Gemini draft a friendly, factual, second-person reason from the report context). On confirm Huddle removes the item and posts the reason as a distinguished, stickied reply, exactly like Reddit's native removal-reason flow. All actions go through Reddit's API; Huddle never bypasses moderator intent.
 
 ## Screenshots
 
-| Grouped queue | Item with AI summary |
+| Grouped queue | AI summary + suggestion |
 |---|---|
-| ![grouped queue](docs/screenshots/01-grouped-queue.png) | ![AI summary](docs/screenshots/02-ai-summary.png) |
+| ![grouped queue](https://raw.githubusercontent.com/thamothara7/Huddle/main/docs/screenshots/01-grouped-queue.png) | ![AI summary and suggestion](https://raw.githubusercontent.com/thamothara7/Huddle/main/docs/screenshots/02-ai-summary-and-suggestion.png) |
 
-| Context Peek drawer | Bulk action |
+| Context Peek drawer | Reject with reason |
 |---|---|
-| ![drawer](docs/screenshots/03-context-peek-drawer.png) | ![bulk action](docs/screenshots/04-bulk-action.png) |
+| ![drawer](https://raw.githubusercontent.com/thamothara7/Huddle/main/docs/screenshots/03-context-peek-drawer.png) | ![reject with reason](https://raw.githubusercontent.com/thamothara7/Huddle/main/docs/screenshots/04-reject-with-reason.png) |
 
-| Empty state |
+| Bulk action |
 |---|
-| ![empty state](docs/screenshots/05-empty-state.png) |
+| ![bulk action](https://raw.githubusercontent.com/thamothara7/Huddle/main/docs/screenshots/05-bulk-action.png) |
 
 *(Screenshots live under `docs/screenshots/`. Take them in your dev sub after a few test reports.)*
 
