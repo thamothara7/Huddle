@@ -2,6 +2,7 @@ import './index.css';
 
 import { StrictMode, useCallback, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { navigateTo } from '@devvit/web/client';
 import type {
   ActionEntry,
   ActionResponse,
@@ -72,6 +73,14 @@ const useSummary = (itemId: string) => {
   return { summary, loading };
 };
 
+const typeLabel = (t: 'post' | 'comment') => (t === 'post' ? 'Post' : 'Comment');
+
+const redditUrl = (permalink: string | undefined): string | null => {
+  if (!permalink) return null;
+  if (permalink.startsWith('http')) return permalink;
+  return `https://reddit.com${permalink.startsWith('/') ? '' : '/'}${permalink}`;
+};
+
 const ItemRow = ({
   item,
   busy,
@@ -84,17 +93,19 @@ const ItemRow = ({
   onOpenDrawer: () => void;
 }) => {
   const { summary, loading } = useSummary(item.itemId);
+  const url = redditUrl(item.permalink);
   return (
     <li className="p-3 flex justify-between items-start gap-3 text-sm border-t border-gray-100 dark:border-gray-800">
       <button
         onClick={onOpenDrawer}
         className="flex-1 min-w-0 text-left hover:bg-gray-50 dark:hover:bg-gray-800 -m-1 p-1 rounded transition-colors"
       >
-        <div className="font-mono text-[10px] uppercase tracking-wide text-gray-500">
-          {item.type} · {item.itemId}
+        <div className="text-[10px] uppercase tracking-wide text-gray-500 font-medium">
+          {typeLabel(item.type)}{' '}
+          <span className="font-mono text-gray-400">· {item.itemId}</span>
         </div>
         {item.title && (
-          <div className="text-gray-900 dark:text-gray-100 truncate">
+          <div className="text-gray-900 dark:text-gray-100 truncate font-medium">
             {item.title}
           </div>
         )}
@@ -106,27 +117,38 @@ const ItemRow = ({
           )}
         </div>
         <div className="text-gray-500 text-[11px] mt-0.5">
+          Reports:{' '}
           {item.reportReasons.length > 0
             ? item.reportReasons.join(' · ')
             : '(no reason given)'}
-          {item.reportCount > 1 ? ` · ${item.reportCount} reports` : ''}
+          {item.reportCount > 1 ? ` · ${item.reportCount} total` : ''}
         </div>
       </button>
-      <div className="flex gap-2 shrink-0">
-        <button
-          disabled={busy}
-          onClick={() => onAction('approve')}
-          className="px-2 py-1 rounded bg-green-100 hover:bg-green-200 text-green-800 disabled:opacity-50 text-xs"
-        >
-          Approve
-        </button>
-        <button
-          disabled={busy}
-          onClick={() => onAction('remove')}
-          className="px-2 py-1 rounded bg-red-100 hover:bg-red-200 text-red-800 disabled:opacity-50 text-xs"
-        >
-          Remove
-        </button>
+      <div className="flex flex-col items-end gap-1 shrink-0">
+        {url && (
+          <button
+            onClick={() => navigateTo(url)}
+            className="text-[11px] text-gray-500 hover:text-gray-900 dark:hover:text-white underline"
+          >
+            Open ↗
+          </button>
+        )}
+        <div className="flex gap-2">
+          <button
+            disabled={busy}
+            onClick={() => onAction('approve')}
+            className="px-2 py-1 rounded bg-green-100 hover:bg-green-200 text-green-800 disabled:opacity-50 text-xs"
+          >
+            Approve
+          </button>
+          <button
+            disabled={busy}
+            onClick={() => onAction('remove')}
+            className="px-2 py-1 rounded bg-red-100 hover:bg-red-200 text-red-800 disabled:opacity-50 text-xs"
+          >
+            Remove
+          </button>
+        </div>
       </div>
     </li>
   );
@@ -145,7 +167,7 @@ const Group = ({
   onToggle: () => void;
   busy: string | null;
   onAction: (itemId: string, a: 'approve' | 'remove') => void;
-  onOpenDrawer: (itemId: string) => void;
+  onOpenDrawer: (item: QueueItem) => void;
 }) => (
   <li className="border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
     <button
@@ -166,7 +188,7 @@ const Group = ({
             item={item}
             busy={busy === item.itemId}
             onAction={(a) => onAction(item.itemId, a)}
-            onOpenDrawer={() => onOpenDrawer(item.itemId)}
+            onOpenDrawer={() => onOpenDrawer(item)}
           />
         ))}
       </ul>
@@ -278,11 +300,14 @@ const Timeline = ({ actions }: { actions: ActionEntry[] }) => {
 
 const ContextPeekDrawer = ({
   itemId,
+  permalink,
   onClose,
 }: {
   itemId: string;
+  permalink: string | undefined;
   onClose: () => void;
 }) => {
+  const url = redditUrl(permalink);
   const [data, setData] = useState<ContextPeekResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -316,16 +341,26 @@ const ContextPeekDrawer = ({
     <div className="fixed inset-0 z-50 flex">
       <div className="flex-1 bg-black/30" onClick={onClose} />
       <aside className="w-[360px] max-w-full bg-white dark:bg-gray-900 shadow-xl overflow-y-auto">
-        <header className="p-3 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center sticky top-0 bg-white dark:bg-gray-900">
-          <div>
-            <h2 className="font-semibold text-sm">
+        <header className="p-3 border-b border-gray-200 dark:border-gray-800 flex justify-between items-start sticky top-0 bg-white dark:bg-gray-900">
+          <div className="min-w-0">
+            <h2 className="font-semibold text-sm truncate">
               Context · u/{data?.authorName ?? '…'}
             </h2>
-            <p className="text-[10px] text-gray-500 font-mono">{itemId}</p>
+            <p className="text-[10px] text-gray-500 font-mono truncate">
+              {itemId}
+            </p>
+            {url && (
+              <button
+                onClick={() => navigateTo(url)}
+                className="text-[11px] text-gray-500 hover:text-gray-900 dark:hover:text-white underline mt-1"
+              >
+                Open on Reddit ↗
+              </button>
+            )}
           </div>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-900 dark:hover:text-white text-lg leading-none"
+            className="text-gray-500 hover:text-gray-900 dark:hover:text-white text-xl leading-none ml-2"
           >
             ×
           </button>
@@ -370,7 +405,7 @@ const App = () => {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [drawerItemId, setDrawerItemId] = useState<string | null>(null);
+  const [drawerItem, setDrawerItem] = useState<QueueItem | null>(null);
 
   useEffect(() => {
     if (groups.length === 1) {
@@ -398,7 +433,7 @@ const App = () => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: ActionResponse = await res.json();
       if (!data.ok) throw new Error('action returned not-ok');
-      if (drawerItemId === itemId) setDrawerItemId(null);
+      if (drawerItem?.itemId === itemId) setDrawerItem(null);
       await refresh();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
@@ -442,16 +477,17 @@ const App = () => {
               onToggle={() => toggle(g.groupKey)}
               busy={busy}
               onAction={act}
-              onOpenDrawer={setDrawerItemId}
+              onOpenDrawer={setDrawerItem}
             />
           ))}
         </ul>
       </div>
 
-      {drawerItemId && (
+      {drawerItem && (
         <ContextPeekDrawer
-          itemId={drawerItemId}
-          onClose={() => setDrawerItemId(null)}
+          itemId={drawerItem.itemId}
+          permalink={drawerItem.permalink}
+          onClose={() => setDrawerItem(null)}
         />
       )}
     </div>

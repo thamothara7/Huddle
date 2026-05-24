@@ -6,6 +6,7 @@ export type QueueItem = {
   authorName: string;
   parentPostId?: string;
   title?: string;
+  permalink?: string;
   reportReasons: string[];
   reportCount: number;
   createdAt: number;
