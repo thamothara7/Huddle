@@ -32,7 +32,17 @@ Huddle is a Devvit app that renders a smarter, team-aware modqueue inside a cust
 
 ## Screenshots
 
-Screenshots live under [`docs/screenshots/`](docs/screenshots/) — see the README there for what each shot captures. Take them in your dev sub after seeding a few test reports.
+| Splash | Grouped queue |
+|---|---|
+| ![splash](https://raw.githubusercontent.com/thamothara7/Huddle/main/docs/screenshots/07-splash.png) | ![grouped queue](https://raw.githubusercontent.com/thamothara7/Huddle/main/docs/screenshots/01-grouped-queue.png) |
+
+| AI summary + suggestion chip | Context Peek drawer |
+|---|---|
+| ![AI summary and suggestion](https://raw.githubusercontent.com/thamothara7/Huddle/main/docs/screenshots/02-ai-summary-and-suggestion.png) | ![context peek drawer](https://raw.githubusercontent.com/thamothara7/Huddle/main/docs/screenshots/03-context-peek-drawer.png) |
+
+| Empty state |
+|---|
+| ![empty state](https://raw.githubusercontent.com/thamothara7/Huddle/main/docs/screenshots/06-empty-state.png) |
 
 ## Install in your subreddit
 
