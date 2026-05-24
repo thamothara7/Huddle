@@ -7,51 +7,57 @@ import { createRoot } from 'react-dom/client';
 
 export const Splash = () => {
   return (
-    <div className="flex relative flex-col justify-center items-center min-h-screen gap-4 bg-white dark:bg-gray-900">
-      <img
-        className="object-contain w-1/2 max-w-[250px] mx-auto"
-        src="/snoo.png"
-        alt="Snoo"
-      />
-      <div className="flex flex-col items-center gap-2">
-        <h1 className="text-2xl font-bold text-center text-gray-900 dark:text-white">
+    <div className="relative flex flex-col justify-center items-center min-h-screen p-6 bg-gradient-to-br from-orange-50 via-white to-rose-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 overflow-hidden">
+      <div className="absolute inset-0 pointer-events-none opacity-50 dark:opacity-30">
+        <div className="absolute top-[-40%] left-[-20%] w-[60%] h-[60%] rounded-full bg-orange-300/30 dark:bg-orange-500/20 blur-3xl" />
+        <div className="absolute bottom-[-30%] right-[-15%] w-[50%] h-[50%] rounded-full bg-rose-300/30 dark:bg-rose-500/20 blur-3xl" />
+      </div>
+
+      <div className="relative max-w-sm w-full text-center">
+        <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500 to-rose-500 grid place-items-center text-white text-3xl font-black shadow-xl shadow-orange-500/30 mb-5 select-none">
+          h
+        </div>
+
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight mb-1">
           Huddle
         </h1>
-        <p className="text-base text-center text-gray-600 dark:text-gray-300">
+        <p className="text-base text-gray-700 dark:text-gray-200 mb-1">
           The modqueue, with intelligence.
         </p>
-        <p className="text-sm text-center text-gray-500 dark:text-gray-400">
-          Hey {context.username ?? 'mod'} — open the queue to see grouped reports.
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-7">
+          Hey {context.username ?? 'mod'} — grouped reports, factual AI
+          summaries, one-click verification.
         </p>
-      </div>
-      <div className="flex items-center justify-center mt-5">
+
         <button
-          className="flex items-center justify-center bg-[#d93900] dark:bg-orange-600 text-white w-auto h-10 rounded-full cursor-pointer transition-colors px-4 hover:bg-[#c23300] dark:hover:bg-orange-700"
+          className="group inline-flex items-center justify-center gap-2 px-6 h-11 rounded-xl bg-gradient-to-br from-orange-500 to-rose-500 text-white font-semibold shadow-lg shadow-orange-500/25 hover:shadow-xl hover:shadow-orange-500/40 hover:scale-[1.02] active:scale-100 transition-all"
           onClick={(e) => requestExpandedMode(e.nativeEvent, 'game')}
         >
           Open queue
+          <span className="transition-transform group-hover:translate-x-0.5">→</span>
         </button>
       </div>
-      <footer className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-3 text-[0.8em] text-gray-600 dark:text-gray-400">
+
+      <footer className="absolute bottom-5 left-1/2 -translate-x-1/2 flex items-center gap-3 text-[11px] text-gray-500 dark:text-gray-400">
         <button
-          className="cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
+          className="hover:text-gray-900 dark:hover:text-white transition-colors"
+          onClick={() => navigateTo('https://github.com/thamothara7/Huddle')}
+        >
+          GitHub
+        </button>
+        <span className="text-gray-300 dark:text-gray-700">·</span>
+        <button
+          className="hover:text-gray-900 dark:hover:text-white transition-colors"
+          onClick={() => navigateTo('https://arxiv.org/abs/2509.07314')}
+        >
+          Research
+        </button>
+        <span className="text-gray-300 dark:text-gray-700">·</span>
+        <button
+          className="hover:text-gray-900 dark:hover:text-white transition-colors"
           onClick={() => navigateTo('https://developers.reddit.com/docs')}
         >
-          Docs
-        </button>
-        <span className="text-gray-300 dark:text-gray-600">|</span>
-        <button
-          className="cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-          onClick={() => navigateTo('https://www.reddit.com/r/Devvit')}
-        >
-          r/Devvit
-        </button>
-        <span className="text-gray-300 dark:text-gray-600">|</span>
-        <button
-          className="cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-          onClick={() => navigateTo('https://discord.com/invite/R7yu2wh9Qz')}
-        >
-          Discord
+          Devvit
         </button>
       </footer>
     </div>
