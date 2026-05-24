@@ -143,121 +143,115 @@ const ItemRow = ({
   const isAi = source === 'llm' || source === 'cache';
 
   return (
-    <li className="px-4 py-3 border-t border-gray-100 dark:border-gray-800/60 hover:bg-gray-50/60 dark:hover:bg-gray-900/40 transition-colors">
-      <div className="flex justify-between items-start gap-3">
-        <button
-          onClick={onOpenDrawer}
-          className="flex-1 min-w-0 text-left group"
-        >
-          <div className="flex items-center gap-2 mb-1 text-[10px] uppercase tracking-wider font-semibold">
-            <span className="text-gray-500 dark:text-gray-400">
-              {typeLabel(item.type)}
-            </span>
-            <span className="font-mono normal-case tracking-normal text-gray-400 dark:text-gray-500">
-              {item.itemId}
-            </span>
-            {url && (
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={(e) => {
+    <li className="px-3 sm:px-4 py-3 border-t border-gray-100 dark:border-gray-800/60 hover:bg-gray-50/60 dark:hover:bg-gray-900/40 transition-colors">
+      <button
+        onClick={onOpenDrawer}
+        className="w-full text-left group block"
+      >
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mb-1 text-[10px] uppercase tracking-wider font-semibold">
+          <span className="text-gray-500 dark:text-gray-400">
+            {typeLabel(item.type)}
+          </span>
+          <span className="font-mono normal-case tracking-normal text-gray-400 dark:text-gray-500 truncate max-w-[140px]">
+            {item.itemId}
+          </span>
+          {url && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                navigateTo(url);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
                   e.stopPropagation();
                   navigateTo(url);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.stopPropagation();
-                    navigateTo(url);
-                  }
-                }}
-                className="text-orange-600 dark:text-orange-400 normal-case tracking-normal hover:underline cursor-pointer"
-              >
-                Open ↗
-              </span>
-            )}
-          </div>
-
-          {item.title && (
-            <p className="font-semibold text-gray-900 dark:text-gray-100 truncate mb-1.5 group-hover:text-orange-700 dark:group-hover:text-orange-300 transition-colors">
-              {item.title}
-            </p>
+                }
+              }}
+              className="text-orange-600 dark:text-orange-400 normal-case tracking-normal hover:underline cursor-pointer"
+            >
+              Open ↗
+            </span>
           )}
+        </div>
 
-          <div
-            className={`flex items-start gap-2 text-sm leading-relaxed mb-1.5 ${
-              isAi
-                ? 'text-gray-800 dark:text-gray-200'
-                : 'text-gray-600 dark:text-gray-400'
+        {item.title && (
+          <p className="font-semibold text-gray-900 dark:text-gray-100 truncate mb-1.5 group-hover:text-orange-700 dark:group-hover:text-orange-300 transition-colors">
+            {item.title}
+          </p>
+        )}
+
+        <p
+          className={`text-sm leading-relaxed mb-1.5 break-words ${
+            isAi
+              ? 'text-gray-800 dark:text-gray-200'
+              : 'text-gray-600 dark:text-gray-400'
+          }`}
+        >
+          <span
+            className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 mr-1.5 rounded text-[9px] font-mono uppercase tracking-wider align-baseline ${
+              loading
+                ? 'bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500'
+                : isAi
+                  ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'
+                  : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
             }`}
           >
-            <span
-              className={`shrink-0 mt-0.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider ${
-                loading
-                  ? 'bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500'
-                  : isAi
-                    ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'
-                    : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
-              }`}
-            >
-              {loading ? '…' : isAi ? '✦ AI' : 'raw'}
+            {loading ? '…' : isAi ? '✦ AI' : 'raw'}
+          </span>
+          {loading ? (
+            <span className="inline-block animate-pulse bg-gray-200 dark:bg-gray-800 h-4 w-40 rounded align-middle" />
+          ) : summary && summary.trim().length > 0 ? (
+            summary
+          ) : (
+            <span className="italic text-gray-500">
+              (empty summary — source={source ?? 'none'})
             </span>
-            <span className="min-w-0">
-              {loading ? (
-                <span className="inline-block animate-pulse bg-gray-200 dark:bg-gray-800 h-4 w-56 rounded align-middle" />
-              ) : summary && summary.trim().length > 0 ? (
-                summary
-              ) : (
-                <span className="italic text-gray-500">
-                  (empty summary — source={source ?? 'none'})
-                </span>
-              )}
-            </span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500 dark:text-gray-400">
-            <span className="inline-flex items-center gap-1">
-              <span aria-hidden>⚑</span>
-              {item.reportReasons.length > 0
-                ? item.reportReasons.join(' · ')
-                : '(no user reports)'}
-              {item.reportCount > 1 && (
-                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-medium">
-                  {item.reportCount}
-                </span>
-              )}
-            </span>
-          </div>
-
-          {item.modReports && item.modReports.length > 0 && (
-            <div className="mt-1 flex items-start gap-2 text-[11px] text-amber-700 dark:text-amber-300">
-              <span className="shrink-0 px-1.5 py-0.5 rounded font-mono text-[9px] uppercase tracking-wider bg-amber-100 dark:bg-amber-900/40">
-                MOD
-              </span>
-              <span>{item.modReports.join(' · ')}</span>
-            </div>
           )}
-        </button>
+        </p>
 
-        <div className="flex gap-1.5 shrink-0">
-          <button
-            disabled={busy}
-            onClick={() => onAction('approve')}
-            className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-300 disabled:opacity-50 text-xs font-medium border border-emerald-200/50 dark:border-emerald-800/50 transition-colors"
-            aria-label="Approve"
-          >
-            <span aria-hidden className="mr-1">✓</span>
-            Approve
-          </button>
-          <button
-            disabled={busy}
-            onClick={() => onAction('remove')}
-            className="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:hover:bg-rose-900/50 dark:text-rose-300 disabled:opacity-50 text-xs font-medium border border-rose-200/50 dark:border-rose-800/50 transition-colors"
-            aria-label="Remove"
-          >
-            <span aria-hidden className="mr-1">✗</span>
-            Remove
-          </button>
-        </div>
+        <p className="text-[11px] text-gray-500 dark:text-gray-400 break-words">
+          <span aria-hidden className="mr-1">⚑</span>
+          {item.reportReasons.length > 0
+            ? item.reportReasons.join(' · ')
+            : '(no user reports)'}
+          {item.reportCount > 1 && (
+            <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-medium">
+              {item.reportCount}
+            </span>
+          )}
+        </p>
+
+        {item.modReports && item.modReports.length > 0 && (
+          <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300 break-words">
+            <span className="inline-block mr-1.5 px-1.5 py-0.5 rounded font-mono text-[9px] uppercase tracking-wider bg-amber-100 dark:bg-amber-900/40 align-baseline">
+              MOD
+            </span>
+            {item.modReports.join(' · ')}
+          </p>
+        )}
+      </button>
+
+      <div className="mt-2.5 flex gap-1.5">
+        <button
+          disabled={busy}
+          onClick={() => onAction('approve')}
+          className="flex-1 sm:flex-none px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-300 disabled:opacity-50 text-xs font-medium border border-emerald-200/50 dark:border-emerald-800/50 transition-colors"
+          aria-label="Approve"
+        >
+          <span aria-hidden className="mr-1">✓</span>
+          Approve
+        </button>
+        <button
+          disabled={busy}
+          onClick={() => onAction('remove')}
+          className="flex-1 sm:flex-none px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:hover:bg-rose-900/50 dark:text-rose-300 disabled:opacity-50 text-xs font-medium border border-rose-200/50 dark:border-rose-800/50 transition-colors"
+          aria-label="Remove"
+        >
+          <span aria-hidden className="mr-1">✗</span>
+          Remove
+        </button>
       </div>
     </li>
   );
@@ -288,53 +282,55 @@ const Group = ({
   const gradient = avatarGradient(group.authorName);
   return (
     <li className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/40 overflow-hidden shadow-sm">
-      <div className="px-4 py-3 flex items-center gap-3 bg-gray-50/60 dark:bg-gray-900/60 border-b border-gray-200/60 dark:border-gray-800/60">
-        <button
-          onClick={onToggle}
-          className="flex items-center gap-3 flex-1 min-w-0 text-left"
-          aria-expanded={expanded}
-        >
-          <div
-            className={`shrink-0 w-9 h-9 rounded-full bg-gradient-to-br ${gradient} grid place-items-center text-white text-sm font-bold shadow-sm select-none`}
-            aria-hidden
+      <div className="px-3 sm:px-4 py-3 bg-gray-50/60 dark:bg-gray-900/60 border-b border-gray-200/60 dark:border-gray-800/60">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onToggle}
+            className="flex items-center gap-3 flex-1 min-w-0 text-left"
+            aria-expanded={expanded}
           >
-            {initial}
-          </div>
-          <div className="min-w-0">
-            <p className="font-semibold truncate text-gray-900 dark:text-gray-100">
-              u/{group.authorName}
-            </p>
-            <p className="text-[11px] text-gray-500 dark:text-gray-400">
-              {group.items.length}{' '}
-              {group.items.length === 1 ? 'report' : 'reports'}
-              {' · '}
-              {expanded ? 'expanded' : 'collapsed'}
-            </p>
-          </div>
-        </button>
-        <div className="flex items-center gap-2 shrink-0">
+            <div
+              className={`shrink-0 w-9 h-9 rounded-full bg-gradient-to-br ${gradient} grid place-items-center text-white text-sm font-bold shadow-sm select-none`}
+              aria-hidden
+            >
+              {initial}
+            </div>
+            <div className="min-w-0">
+              <p className="font-semibold truncate text-gray-900 dark:text-gray-100">
+                u/{group.authorName}
+              </p>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                {group.items.length}{' '}
+                {group.items.length === 1 ? 'report' : 'reports'}
+              </p>
+            </div>
+          </button>
+          <button
+            onClick={onToggle}
+            className="shrink-0 w-7 h-7 grid place-items-center rounded-md text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:hover:text-white dark:hover:bg-gray-800 transition-colors"
+            aria-label={expanded ? 'Collapse' : 'Expand'}
+          >
+            <span className="text-sm leading-none">{expanded ? '▾' : '▸'}</span>
+          </button>
+        </div>
+        <div className="mt-2.5 flex gap-1.5">
           <button
             disabled={bulkBusy}
             onClick={() => onBulk('approve')}
-            className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-300 disabled:opacity-50 text-xs font-medium border border-emerald-200/50 dark:border-emerald-800/50 transition-colors"
+            className="flex-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-300 disabled:opacity-50 text-xs font-medium border border-emerald-200/50 dark:border-emerald-800/50 transition-colors"
             title={`Approve all ${group.items.length} items from u/${group.authorName}`}
           >
+            <span aria-hidden className="mr-1">✓</span>
             Approve all
           </button>
           <button
             disabled={bulkBusy}
             onClick={() => onBulk('remove')}
-            className="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:hover:bg-rose-900/50 dark:text-rose-300 disabled:opacity-50 text-xs font-medium border border-rose-200/50 dark:border-rose-800/50 transition-colors"
+            className="flex-1 px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:hover:bg-rose-900/50 dark:text-rose-300 disabled:opacity-50 text-xs font-medium border border-rose-200/50 dark:border-rose-800/50 transition-colors"
             title={`Remove all ${group.items.length} items from u/${group.authorName}`}
           >
+            <span aria-hidden className="mr-1">✗</span>
             Remove all
-          </button>
-          <button
-            onClick={onToggle}
-            className="w-7 h-7 grid place-items-center rounded-md text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:hover:text-white dark:hover:bg-gray-800 transition-colors"
-            aria-label={expanded ? 'Collapse' : 'Expand'}
-          >
-            <span className="text-sm leading-none">{expanded ? '▾' : '▸'}</span>
           </button>
         </div>
       </div>
@@ -713,29 +709,29 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white via-white to-orange-50/40 dark:from-gray-950 dark:via-gray-950 dark:to-gray-900 text-gray-900 dark:text-gray-100">
-      <div className="max-w-3xl mx-auto p-4 sm:p-6">
-        <header className="mb-5 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-rose-500 grid place-items-center text-white font-black text-base shadow-md shadow-orange-500/20 select-none">
+      <div className="max-w-3xl mx-auto p-3 sm:p-6">
+        <header className="mb-4 sm:mb-5 flex justify-between items-center gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="shrink-0 w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-rose-500 grid place-items-center text-white font-black text-base shadow-md shadow-orange-500/20 select-none">
               h
             </div>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-lg font-bold tracking-tight leading-none">
                 Huddle
               </h1>
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 truncate">
                 the modqueue, with intelligence
               </p>
             </div>
           </div>
-          <div className="text-right">
-            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-none">
+          <div className="text-right shrink-0">
+            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-none whitespace-nowrap">
               {loading ? '—' : itemCount}{' '}
               <span className="text-gray-500 dark:text-gray-400 font-normal">
                 {itemCount === 1 ? 'item' : 'items'}
               </span>
             </p>
-            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 flex items-center justify-end gap-1.5">
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 flex items-center justify-end gap-1.5 whitespace-nowrap">
               {!loading && (
                 <span
                   className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"
@@ -744,7 +740,7 @@ const App = () => {
               )}
               {loading
                 ? 'Loading…'
-                : `${groups.length} ${groups.length === 1 ? 'group' : 'groups'} · live`}
+                : `${groups.length} ${groups.length === 1 ? 'group' : 'groups'}`}
             </p>
           </div>
         </header>
