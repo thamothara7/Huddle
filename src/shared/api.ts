@@ -25,6 +25,7 @@ export type QueueGroup = {
 export type InitResponse = {
   type: 'init';
   postId: string;
+  subredditName: string;
   username: string;
   groups: QueueGroup[];
 };

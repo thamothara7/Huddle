@@ -20,7 +20,7 @@ type ErrorResponse = { status: 'error'; message: string };
 export const api = new Hono();
 
 api.get('/init', async (c) => {
-  const { postId, subredditId } = context;
+  const { postId, subredditId, subredditName } = context;
   if (!postId || !subredditId) {
     return c.json<ErrorResponse>(
       { status: 'error', message: 'missing postId or subredditId in context' },
@@ -34,6 +34,7 @@ api.get('/init', async (c) => {
   return c.json<InitResponse>({
     type: 'init',
     postId,
+    subredditName: subredditName ?? '',
     username: username ?? 'anonymous',
     groups,
   });

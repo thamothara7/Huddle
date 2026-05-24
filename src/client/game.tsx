@@ -19,6 +19,7 @@ const POLL_MS = 5000;
 
 const useQueue = () => {
   const [groups, setGroups] = useState<QueueGroup[]>([]);
+  const [subredditName, setSubredditName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,6 +29,7 @@ const useQueue = () => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: InitResponse = await res.json();
       setGroups(data.groups);
+      setSubredditName(data.subredditName);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -44,7 +46,7 @@ const useQueue = () => {
     return () => clearInterval(id);
   }, [refresh]);
 
-  return { groups, loading, error, refresh };
+  return { groups, subredditName, loading, error, refresh };
 };
 
 const useSummary = (itemId: string) => {
@@ -75,25 +77,43 @@ const useSummary = (itemId: string) => {
 
 const typeLabel = (t: 'post' | 'comment') => (t === 'post' ? 'Post' : 'Comment');
 
-const redditUrl = (permalink: string | undefined): string | null => {
-  if (!permalink) return null;
-  if (permalink.startsWith('http')) return permalink;
-  return `https://reddit.com${permalink.startsWith('/') ? '' : '/'}${permalink}`;
+const redditUrl = (
+  item: Pick<QueueItem, 'itemId' | 'type' | 'permalink' | 'parentPostId'>,
+  subredditName: string
+): string | null => {
+  if (item.permalink) {
+    return item.permalink.startsWith('http')
+      ? item.permalink
+      : `https://reddit.com${item.permalink.startsWith('/') ? '' : '/'}${item.permalink}`;
+  }
+  if (!subredditName) return null;
+  if (item.type === 'post' && item.itemId.startsWith('t3_')) {
+    const id = item.itemId.slice(3);
+    return `https://reddit.com/r/${subredditName}/comments/${id}/`;
+  }
+  if (item.type === 'comment' && item.itemId.startsWith('t1_') && item.parentPostId?.startsWith('t3_')) {
+    const postId = item.parentPostId.slice(3);
+    const commentId = item.itemId.slice(3);
+    return `https://reddit.com/r/${subredditName}/comments/${postId}/_/${commentId}/`;
+  }
+  return null;
 };
 
 const ItemRow = ({
   item,
+  subredditName,
   busy,
   onAction,
   onOpenDrawer,
 }: {
   item: QueueItem;
+  subredditName: string;
   busy: boolean;
   onAction: (a: 'approve' | 'remove') => void;
   onOpenDrawer: () => void;
 }) => {
   const { summary, loading } = useSummary(item.itemId);
-  const url = redditUrl(item.permalink);
+  const url = redditUrl(item, subredditName);
   return (
     <li className="p-3 flex justify-between items-start gap-3 text-sm border-t border-gray-100 dark:border-gray-800">
       <button
@@ -156,6 +176,7 @@ const ItemRow = ({
 
 const Group = ({
   group,
+  subredditName,
   expanded,
   onToggle,
   busy,
@@ -163,6 +184,7 @@ const Group = ({
   onOpenDrawer,
 }: {
   group: QueueGroup;
+  subredditName: string;
   expanded: boolean;
   onToggle: () => void;
   busy: string | null;
@@ -186,6 +208,7 @@ const Group = ({
           <ItemRow
             key={item.itemId}
             item={item}
+            subredditName={subredditName}
             busy={busy === item.itemId}
             onAction={(a) => onAction(item.itemId, a)}
             onOpenDrawer={() => onOpenDrawer(item)}
@@ -299,15 +322,16 @@ const Timeline = ({ actions }: { actions: ActionEntry[] }) => {
 };
 
 const ContextPeekDrawer = ({
-  itemId,
-  permalink,
+  item,
+  subredditName,
   onClose,
 }: {
-  itemId: string;
-  permalink: string | undefined;
+  item: QueueItem;
+  subredditName: string;
   onClose: () => void;
 }) => {
-  const url = redditUrl(permalink);
+  const itemId = item.itemId;
+  const url = redditUrl(item, subredditName);
   const [data, setData] = useState<ContextPeekResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -401,7 +425,7 @@ const ContextPeekDrawer = ({
 };
 
 const App = () => {
-  const { groups, loading, error, refresh } = useQueue();
+  const { groups, subredditName, loading, error, refresh } = useQueue();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -473,6 +497,7 @@ const App = () => {
             <Group
               key={g.groupKey}
               group={g}
+              subredditName={subredditName}
               expanded={expanded.has(g.groupKey)}
               onToggle={() => toggle(g.groupKey)}
               busy={busy}
@@ -485,8 +510,8 @@ const App = () => {
 
       {drawerItem && (
         <ContextPeekDrawer
-          itemId={drawerItem.itemId}
-          permalink={drawerItem.permalink}
+          item={drawerItem}
+          subredditName={subredditName}
           onClose={() => setDrawerItem(null)}
         />
       )}
