@@ -31,8 +31,9 @@ Huddle installs as a custom post in any subreddit you moderate. Open it and you 
 
   > **Why an AI that can't see content?** Every other AI mod tool risks hallucinating about your community's content. Huddle's LLM only sees a 5-field fact dict — it cannot make claims it can't justify. Mods see the exact same dict next to the AI's sentence in the Context Peek drawer, so every summary is auditable.
 
-- **Context Peek drawer** — click any item, a right-side drawer slides in showing (1) the exact facts the AI received as a small table, (2) the user's last 5 post/comment titles in this sub with status badges (✓ approved · ✗ removed · ⏳ pending), and (3) a 30-day mod-action mini-timeline. **Titles only — never body content.** Mods who want to read full content click "Open on Reddit ↗" to leave Huddle deliberately.
-- **Bulk + inline actions** — Approve / Remove individual items, or Approve all / Remove all at the group level. Everything goes through Reddit's API; Huddle never auto-actions without an explicit click.
+- **AI-suggested mod action** — a color-coded chip above each item recommends Approve / Remove / Spam with a confidence level and a single factual sentence citing only the dict. Same no-content discipline. When Gemini's free-tier rate-limits (429), a deterministic heuristic over the same facts takes over so the chip stays useful — and the chip suppresses itself entirely when signals are insufficient (`review`).
+- **Context Peek drawer** — click any item, a right-side drawer slides in showing (1) the exact facts the AI received as a small table, (2) the user's last 5 post/comment titles in this sub with two-letter status codes (`ok` / `rm` / `pn` / `sp`), and (3) a 30-day mod-action **stacked histogram** by day and action type. The drawer header surfaces three user-level actions: **Open on Reddit**, **View profile**, and **Ban user** (click-twice to confirm). Banning auto-removes every queued item the user authored in one sweep. **Titles only — never body content.** Mods who want full content click "Open on Reddit" to leave Huddle deliberately.
+- **Bulk + inline + reject-with-reason actions** — Approve / Remove individual items, Approve all / Remove all at the group level (collapsed view only, click-twice to confirm), plus **Reject with reason**: an inline panel where the mod types a removal reason (or clicks "Suggest with AI" to have Gemini draft a friendly, factual, second-person reason from the report context). On confirm Huddle removes the item and posts the reason as a distinguished, stickied reply — same UX Reddit's native removal-reason flow uses. Everything goes through Reddit's API; Huddle never auto-actions without an explicit click.
 
 ---
 
@@ -66,6 +67,8 @@ A reverse-lookup `huddle:item-groups:{itemId}` ZSET lets mod-action cleanup remo
 - **The fallback path is invisible to users.** Whether Gemini returns prose or the raw-facts formatter takes over, the moderator sees the same shape of information in the same place — the LLM is genuine polish, not a load-bearing dependency.
 - **The Context Peek drawer is AI-free by design.** It composes facts + history that are already in Redis. No extra LLM call. The "AI legibility" promise is literal: mods see the exact dict the AI received.
 - **Mod reports surface distinctly.** When a moderator (not an anonymous user) reports an item, the row shows an amber MOD chip with the mod's name when Reddit's API exposes it — anonymous user reports stay anonymous per Reddit's policy.
+- **Three independent AI surfaces, all sharing the same no-content guarantee.** Summary, suggested-action, and removal-reason are three separate Gemini prompts, each tuned for its purpose (formatting / decision-support / mod-to-user message). Each one has its own deterministic fallback so the UI never breaks: raw-facts sentence for summary, rule-based heuristic for suggestion, mod-typed text for removal reason.
+- **Ban closes the user-level loop too.** Banning from the drawer cascade-removes every queued item the user authored in one server-side sweep — a Bajpai finding (mods still leave the queue to take user actions) addressed inside the queue.
 - **Backed by peer-reviewed research.** Every feature maps to a finding in the Bajpai papers.
 
 ---
@@ -96,13 +99,13 @@ The architecture choice that makes all of the above clean is that the data layer
 
 ## What's next
 
-Huddle solves the "leaving the queue for context" half of the modqueue problem. Bajpai 2025a notes that moderators still leave the queue to (1) take user-level actions like banning, (2) check Toolbox usernotes, and (3) read full thread context. The roadmap below addresses each of these honestly:
+Huddle now closes both the "gather context to decide" loop AND the "ban + clean up" loop. Bajpai 2025a still names two pain points that mods leave the queue to handle: (1) Toolbox usernotes and (2) full thread-context reading. Those plus a few platform-scale items are next:
 
 - **Live mod presence** — avatar dots on each row so two mods don't act on the same item simultaneously (the 74.5% collision stat above).
 - **Persistent realtime updates** instead of 5-second polling, via Devvit's realtime channel.
-- **In-drawer ban / mute / approve-user actions** — close the loop on user-level decisions without leaving Huddle.
 - **Toolbox usernote integration** so existing notes surface in the Context Peek drawer.
-- **Reporter reliability scoring** once Huddle has accumulated enough per-user history.
+- **In-drawer mute / approve-user actions** — ban is done; mute and approve-user complete the user-level loop.
+- **Reporter reliability scoring** once Huddle has accumulated enough per-user history (currently blocked by Reddit not exposing anonymous user-report identity).
 - **Postmortem auto-generation** for actioned items, summarizing what happened and why.
 
 These were deliberately scoped out of the MVP per the original spec. The 4-day budget went to the headline 84%-fix.

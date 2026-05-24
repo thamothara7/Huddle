@@ -30,9 +30,11 @@ Huddle is a Devvit app that renders a smarter, team-aware modqueue inside a cust
 
 **2. Factual AI summaries.** Every queue item gets a one-sentence summary in plain English — *"This 4-year-old account has made 2 comments in this subreddit, both within the last 7 days."* The LLM never sees post or comment **content** — only a structured fact dict (account age, prior items in sub, last 7 days, prior removals). When the LLM is unavailable or rate-limited, Huddle silently falls back to a templated raw-facts sentence over the same data, so the UI never breaks.
 
-**3. Context Peek drawer.** Click any item → a right-side drawer shows the exact facts the AI received as a small table, the user's last 5 post/comment titles in this sub with status badges (✓ approved · ✗ removed · ⏳ pending), and a 30-day mod-action mini-timeline. No content is leaked in the drawer; mods who want full content click **Open ↗** to leave Huddle deliberately.
+**3. AI-suggested mod action.** A color-coded chip above each item's action buttons recommends **Approve · Remove · Spam** with a confidence level and a one-sentence factual justification — built from the same fact dict the summary uses. The model never sees content; it can decline with `review` when signals are insufficient. When Gemini is rate-limited (free-tier 429s), a deterministic heuristic over the same facts takes over so the chip stays useful.
 
-**4. Bulk + inline actions.** Approve / Remove per item, or **Approve all** / **Remove all** at the group level. All actions go through Reddit's API — Huddle never bypasses moderator intent.
+**4. Context Peek drawer.** Click any item → a right-side drawer shows the exact facts the AI received as a small table, the user's last 5 post/comment titles in this sub with status codes (`ok` / `rm` / `pn` / `sp`), and a 30-day mod-action stacked histogram by day and action type. From the drawer header a mod can **Open on Reddit**, **View profile**, or **Ban user** (with a click-twice confirm). Banning auto-removes every queued item from that user in one sweep. No body content is leaked in the drawer; mods who want full content click **Open** to leave Huddle deliberately.
+
+**5. Bulk + inline + reject-with-reason actions.** Approve / Remove per item, **Approve all** / **Remove all** at the group level (collapsed view only, with a click-twice confirm), plus **Reject with reason** — an inline panel where the mod types a removal reason (or clicks **Suggest with AI** to have Gemini draft a friendly, factual, second-person reason from the report context). On confirm Huddle removes the item and posts the reason as a distinguished, stickied reply, exactly like Reddit's native removal-reason flow. All actions go through Reddit's API; Huddle never bypasses moderator intent.
 
 ## Screenshots
 
@@ -151,7 +153,7 @@ None of these are v1 blockers — the demo target is the mod queue Bajpai's pape
 - **Action timeline starts at install date.** Huddle records mod actions it observes; it cannot backfill the full history of a user.
 - **User reports are anonymous.** Reddit's trigger payload does not expose reporter identity for user reports, by policy. Huddle surfaces only the report **reason** — and, when present, mod-initiated reports through a distinct amber "MOD" chip.
 - **Single AI provider.** Gemini Flash via Google AI Studio's free tier. Failures of any kind (no key, network, 429, safety block) silently fall back to the raw-facts sentence — Huddle never blocks the UI on the LLM.
-- **What Huddle doesn't fix yet.** Bajpai 2025a notes mods still leave the queue to (1) take user-level actions like banning, (2) check Toolbox usernotes, and (3) read full thread context. Huddle closes the "gather context to decide" loop; the user-level-action and Toolbox-integration loops are roadmap items, not v1.
+- **What Huddle doesn't fix yet.** Bajpai 2025a notes mods still leave the queue to (1) check Toolbox usernotes and (2) read full thread context. Huddle closes the "gather context to decide" loop and the "ban + clean up" loop; the Toolbox-integration loop and full thread-context view are roadmap items, not v1.
 
 ## License
 
