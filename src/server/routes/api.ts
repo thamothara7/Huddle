@@ -5,6 +5,7 @@ import { getItem, setItem } from '../core/items';
 import { removeItemFromAllGroups } from '../core/groups';
 import { isThingId } from '../core/ids';
 import { computeUserFacts } from '../core/ai/facts';
+import { generateRemovalReason } from '../core/ai/reason';
 import { getOrGenerateSummary } from '../core/ai/summary';
 import { getActionTimeline, getRecentTitles } from '../core/history';
 import { k, USER_SNOOVATAR_TTL_SECONDS } from '../core/keys';
@@ -16,7 +17,10 @@ import type {
   BulkActionResult,
   ContextPeekResponse,
   InitResponse,
+  RejectWithReasonRequest,
+  RejectWithReasonResponse,
   SnoovatarResponse,
+  SuggestReasonResponse,
   SummaryResponse,
   UserActionRequest,
   UserActionResponse,
@@ -292,6 +296,161 @@ api.post('/action-bulk', async (c) => {
     okCount,
     failCount: results.length - okCount,
   });
+});
+
+api.get('/suggest-reason', async (c) => {
+  const { subredditId } = context;
+  const itemId = c.req.query('itemId');
+  if (!itemId || !subredditId) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: 'missing itemId or context' },
+      400
+    );
+  }
+  if (!isThingId(itemId)) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: `not a post or comment id: ${itemId}` },
+      400
+    );
+  }
+  const item = await getItem(itemId);
+  if (!item) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: `item ${itemId} not found` },
+      404
+    );
+  }
+  if (item.subId !== subredditId) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: 'item is not in this subreddit' },
+      403
+    );
+  }
+  const facts = await computeUserFacts(item.authorName, subredditId);
+  const reason = await generateRemovalReason({
+    itemType: item.type,
+    title: item.title,
+    userReportReasons: item.reportReasons,
+    modReportReasons: (item.modReports ?? []).map((m) => m.reason),
+    accountAgeDays: facts.accountAgeDays,
+    priorRemovals: facts.removedInSubTotal,
+  });
+  if (!reason) {
+    return c.json<ErrorResponse>(
+      {
+        status: 'error',
+        message:
+          'Could not generate a reason. Either no Gemini key is configured or the model returned an empty response. Type your own reason instead.',
+      },
+      503
+    );
+  }
+  return c.json<SuggestReasonResponse>({
+    type: 'suggest-reason',
+    itemId,
+    reason,
+  });
+});
+
+api.post('/reject-with-reason', async (c) => {
+  const body = await c.req.json<RejectWithReasonRequest>();
+  const { subredditId } = context;
+  const trimmed = (body.reason ?? '').trim();
+  if (!body.itemId || !subredditId) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: 'missing itemId or context' },
+      400
+    );
+  }
+  if (!isThingId(body.itemId)) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: `not a post or comment id: ${body.itemId}` },
+      400
+    );
+  }
+  if (trimmed.length < 10) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: 'reason must be at least 10 characters' },
+      400
+    );
+  }
+  const item = await getItem(body.itemId);
+  if (!item) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: `item ${body.itemId} not found` },
+      404
+    );
+  }
+  if (item.subId !== subredditId) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: 'item is not in this subreddit' },
+      403
+    );
+  }
+
+  try {
+    const username = await reddit.getCurrentUsername();
+
+    // 1. Remove the item from Reddit
+    await reddit.remove(body.itemId, false);
+
+    // 2. Post the reason as a distinguished + stickied reply.
+    //    submitComment accepts both t3_ (post) and t1_ (comment) ids — for
+    //    posts the reply is top-level, for comments it nests under the comment.
+    let commentId: string | undefined;
+    try {
+      const reply = await reddit.submitComment({
+        id: body.itemId,
+        text: trimmed,
+      });
+      commentId = reply.id;
+      try {
+        await reply.distinguish(true);
+      } catch (distinguishErr) {
+        console.warn(
+          '[huddle] reject-with-reason: distinguish/sticky failed:',
+          distinguishErr instanceof Error
+            ? distinguishErr.message
+            : distinguishErr
+        );
+      }
+    } catch (commentErr) {
+      console.error(
+        '[huddle] reject-with-reason: posting reason comment failed:',
+        commentErr instanceof Error ? commentErr.message : commentErr
+      );
+      // Removal already succeeded — proceed to mark actioned even if the
+      // reason comment didn't post. Surface in the response.
+    }
+
+    // 3. Update local state
+    await setItem({
+      ...item,
+      status: 'actioned',
+      actionedBy: username ?? undefined,
+      actionTaken: 'remove',
+    });
+    await removeItemFromAllGroups(item.subId, item.itemId);
+
+    console.log(
+      `[huddle] /api/reject-with-reason ${body.itemId} ok (commentId=${commentId ?? 'none'})`
+    );
+    return c.json<RejectWithReasonResponse>({
+      type: 'reject-with-reason',
+      itemId: body.itemId,
+      ok: true,
+      commentId,
+    });
+  } catch (error) {
+    console.error('[huddle] /api/reject-with-reason failed:', error);
+    return c.json<ErrorResponse>(
+      {
+        status: 'error',
+        message: error instanceof Error ? error.message : 'rejection failed',
+      },
+      500
+    );
+  }
 });
 
 const VALID_USER_ACTIONS = new Set(['ban', 'unban', 'mute', 'unmute']);

@@ -12,7 +12,9 @@ import type {
   QueueGroup,
   QueueItem,
   RecentEntry,
+  RejectWithReasonResponse,
   SnoovatarResponse,
+  SuggestReasonResponse,
   SummaryResponse,
   UserActionResponse,
   UserFacts,
@@ -256,17 +258,92 @@ const ItemRow = ({
   subredditName,
   busy,
   onAction,
+  onRejected,
   onOpenDrawer,
 }: {
   item: QueueItem;
   subredditName: string;
   busy: boolean;
   onAction: (a: 'approve' | 'remove') => void;
+  onRejected: () => void;
   onOpenDrawer: () => void;
 }) => {
   const { summary, source, loading } = useSummary(item.itemId);
   const url = redditUrl(item, subredditName);
   const isAi = source === 'llm' || source === 'cache';
+
+  // Reject-with-reason inline panel state
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [reasonText, setReasonText] = useState('');
+  const [suggesting, setSuggesting] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectError, setRejectError] = useState<string | null>(null);
+
+  const openRejectPanel = () => {
+    setRejectOpen(true);
+    setRejectError(null);
+  };
+
+  const closeRejectPanel = () => {
+    setRejectOpen(false);
+    setReasonText('');
+    setSuggesting(false);
+    setRejecting(false);
+    setRejectError(null);
+  };
+
+  const suggestReason = async () => {
+    setSuggesting(true);
+    setRejectError(null);
+    try {
+      const res = await fetch(
+        `/api/suggest-reason?itemId=${encodeURIComponent(item.itemId)}`
+      );
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as {
+          message?: string;
+        } | null;
+        throw new Error(body?.message ?? `HTTP ${res.status}`);
+      }
+      const data: SuggestReasonResponse = await res.json();
+      setReasonText(data.reason);
+    } catch (err) {
+      setRejectError(err instanceof Error ? err.message : 'suggest failed');
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
+  const confirmReject = async () => {
+    const trimmed = reasonText.trim();
+    if (trimmed.length < 10) {
+      setRejectError('Reason must be at least 10 characters.');
+      return;
+    }
+    setRejecting(true);
+    setRejectError(null);
+    try {
+      const res = await fetch('/api/reject-with-reason', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId: item.itemId, reason: trimmed }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as {
+          message?: string;
+        } | null;
+        throw new Error(body?.message ?? `HTTP ${res.status}`);
+      }
+      const data: RejectWithReasonResponse = await res.json();
+      if (!data.ok) throw new Error('reject returned not-ok');
+      closeRejectPanel();
+      onRejected();
+    } catch (err) {
+      setRejectError(err instanceof Error ? err.message : 'reject failed');
+    } finally {
+      setRejecting(false);
+    }
+  };
 
   return (
     <li className="px-3 sm:px-4 py-3 border-t border-gray-100 dark:border-gray-800/60 hover:bg-gray-50/60 dark:hover:bg-gray-900/40 transition-colors">
@@ -372,24 +449,86 @@ const ItemRow = ({
         )}
       </button>
 
-      <div className="mt-2.5 flex gap-1.5">
-        <button
-          disabled={busy}
-          onClick={() => onAction('approve')}
-          className="flex-1 sm:flex-none px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-300 disabled:opacity-50 text-xs font-medium border border-emerald-200/50 dark:border-emerald-800/50 transition-colors"
-          aria-label="Approve"
-        >
-          Approve
-        </button>
-        <button
-          disabled={busy}
-          onClick={() => onAction('remove')}
-          className="flex-1 sm:flex-none px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:hover:bg-rose-900/50 dark:text-rose-300 disabled:opacity-50 text-xs font-medium border border-rose-200/50 dark:border-rose-800/50 transition-colors"
-          aria-label="Remove"
-        >
-          Remove
-        </button>
-      </div>
+      {!rejectOpen && (
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
+          <button
+            disabled={busy}
+            onClick={() => onAction('approve')}
+            className="flex-1 sm:flex-none px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-300 disabled:opacity-50 text-xs font-medium border border-emerald-200/50 dark:border-emerald-800/50 transition-colors"
+            aria-label="Approve"
+          >
+            Approve
+          </button>
+          <button
+            disabled={busy}
+            onClick={() => onAction('remove')}
+            className="flex-1 sm:flex-none px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:hover:bg-rose-900/50 dark:text-rose-300 disabled:opacity-50 text-xs font-medium border border-rose-200/50 dark:border-rose-800/50 transition-colors"
+            aria-label="Remove"
+          >
+            Remove
+          </button>
+          <button
+            disabled={busy}
+            onClick={openRejectPanel}
+            className="flex-1 sm:flex-none px-2.5 py-1.5 rounded-lg bg-white hover:bg-rose-50 text-rose-700 dark:bg-gray-900/40 dark:hover:bg-rose-900/30 dark:text-rose-300 disabled:opacity-50 text-xs font-medium border border-rose-300/50 dark:border-rose-700/50 transition-colors"
+            aria-label="Reject with reason"
+          >
+            Reject with reason
+          </button>
+        </div>
+      )}
+
+      {rejectOpen && (
+        <div className="mt-2.5 rounded-lg border border-rose-200 dark:border-rose-900/60 bg-rose-50/40 dark:bg-rose-950/30 p-3">
+          <p className="text-[11px] font-semibold text-rose-800 dark:text-rose-200 mb-1.5">
+            Removal reason
+          </p>
+          <p className="text-[10px] text-rose-700/80 dark:text-rose-300/70 mb-2">
+            Will be posted as a distinguished, stickied reply visible to
+            the author and the community.
+          </p>
+          <textarea
+            value={reasonText}
+            onChange={(e) => setReasonText(e.target.value)}
+            disabled={rejecting || suggesting}
+            rows={4}
+            placeholder="Explain why this is being removed. Cite the rule or the report reason."
+            className="w-full px-2.5 py-2 rounded-md border border-rose-200 dark:border-rose-900/60 bg-white dark:bg-gray-950 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-rose-400/50 disabled:opacity-60 resize-y min-h-[80px]"
+          />
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-1.5">
+            <button
+              disabled={suggesting || rejecting}
+              onClick={suggestReason}
+              className="px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 dark:text-indigo-300 disabled:opacity-50 text-xs font-medium border border-indigo-200/50 dark:border-indigo-800/50 transition-colors"
+            >
+              {suggesting ? 'Generating...' : 'Suggest with AI'}
+            </button>
+            <div className="flex gap-1.5">
+              <button
+                disabled={rejecting || suggesting}
+                onClick={closeRejectPanel}
+                className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-gray-100 text-gray-700 dark:bg-gray-900 dark:hover:bg-gray-800 dark:text-gray-200 disabled:opacity-50 text-xs font-medium border border-gray-200 dark:border-gray-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={
+                  rejecting || suggesting || reasonText.trim().length < 10
+                }
+                onClick={confirmReject}
+                className="px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white dark:bg-rose-500 dark:hover:bg-rose-400 disabled:opacity-50 text-xs font-semibold border border-rose-600 dark:border-rose-500 transition-colors"
+              >
+                {rejecting ? 'Removing...' : 'Confirm reject'}
+              </button>
+            </div>
+          </div>
+          {rejectError && (
+            <p className="mt-2 text-[11px] text-rose-700 dark:text-rose-300">
+              {rejectError}
+            </p>
+          )}
+        </div>
+      )}
     </li>
   );
 };
@@ -403,6 +542,7 @@ const Group = ({
   bulkBusy,
   onAction,
   onBulk,
+  onRejected,
   onOpenDrawer,
 }: {
   group: QueueGroup;
@@ -413,6 +553,7 @@ const Group = ({
   bulkBusy: boolean;
   onAction: (itemId: string, a: 'approve' | 'remove') => void;
   onBulk: (a: 'approve' | 'remove') => void;
+  onRejected: () => void;
   onOpenDrawer: (item: QueueItem) => void;
 }) => {
   const gradient = avatarGradient(group.authorName);
@@ -539,6 +680,7 @@ const Group = ({
               subredditName={subredditName}
               busy={busy === item.itemId || bulkBusy}
               onAction={(a) => onAction(item.itemId, a)}
+              onRejected={onRejected}
               onOpenDrawer={() => onOpenDrawer(item)}
             />
           ))}
@@ -1163,6 +1305,7 @@ const App = () => {
                 bulkBusy={bulkBusyKey === g.groupKey}
                 onAction={act}
                 onBulk={(a) => bulkAct(g, a)}
+                onRejected={() => void refresh()}
                 onOpenDrawer={setDrawerItem}
               />
             ))}

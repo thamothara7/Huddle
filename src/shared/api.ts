@@ -82,6 +82,24 @@ export type UserActionResponse = {
   ok: boolean;
 };
 
+export type SuggestReasonResponse = {
+  type: 'suggest-reason';
+  itemId: string;
+  reason: string;
+};
+
+export type RejectWithReasonRequest = {
+  itemId: string;
+  reason: string;
+};
+
+export type RejectWithReasonResponse = {
+  type: 'reject-with-reason';
+  itemId: string;
+  ok: boolean;
+  commentId?: string;
+};
+
 export type UserFacts = {
   accountAgeDays: number;
   postsInSubTotal: number;

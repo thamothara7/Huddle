@@ -73,11 +73,21 @@ triggers.post('/on-app-install', async (c) => {
 const syncReportsFromApi = async (item: QueueItem): Promise<QueueItem> => {
   const snap = await fetchReportsSnapshot(item.itemId);
   if (!snap) return item;
+  // Merge rather than overwrite: when a brand-new report fires this trigger,
+  // Reddit's userReportReasons on the Post/Comment hasn't always propagated
+  // yet, so the snapshot can return [] even though the user just submitted a
+  // reason. Union with the existing in-Redis reasons (dedup) so the trigger-
+  // fed reason isn't silently clobbered. Mod reports stay authoritative from
+  // the snapshot since triggers never deliver mod-report metadata to us.
+  const mergedUserReports = Array.from(
+    new Set([...item.reportReasons, ...snap.userReports])
+  );
+  const apiTotal = snap.userReports.length + snap.modReports.length;
   const merged: QueueItem = {
     ...item,
-    reportReasons: snap.userReports,
+    reportReasons: mergedUserReports,
     modReports: snap.modReports,
-    reportCount: snap.userReports.length + snap.modReports.length || item.reportCount,
+    reportCount: Math.max(apiTotal, mergedUserReports.length, item.reportCount),
   };
   await setItem(merged);
   return merged;
