@@ -42,6 +42,25 @@ export type ActionResponse = {
   ok: boolean;
 };
 
+export type BulkActionRequest = {
+  itemIds: string[];
+  action: 'approve' | 'remove';
+};
+
+export type BulkActionResult = {
+  itemId: string;
+  ok: boolean;
+  error?: string;
+};
+
+export type BulkActionResponse = {
+  type: 'action-bulk';
+  action: 'approve' | 'remove';
+  results: BulkActionResult[];
+  okCount: number;
+  failCount: number;
+};
+
 export type UserFacts = {
   accountAgeDays: number;
   postsInSubTotal: number;

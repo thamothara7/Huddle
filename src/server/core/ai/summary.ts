@@ -21,6 +21,9 @@ export const getOrGenerateSummary = async (
 
   const apiKey = await readGeminiKey();
   if (!apiKey) {
+    console.warn(
+      `[huddle] summary fallback for ${itemId}: no Gemini key configured (set in app settings at developers.reddit.com/apps/huddle-mod)`
+    );
     return factsAsRawSentence(facts);
   }
 

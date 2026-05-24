@@ -6,6 +6,7 @@ import { navigateTo } from '@devvit/web/client';
 import type {
   ActionEntry,
   ActionResponse,
+  BulkActionResponse,
   ContextPeekResponse,
   InitResponse,
   QueueGroup,
@@ -180,7 +181,9 @@ const Group = ({
   expanded,
   onToggle,
   busy,
+  bulkBusy,
   onAction,
+  onBulk,
   onOpenDrawer,
 }: {
   group: QueueGroup;
@@ -188,20 +191,41 @@ const Group = ({
   expanded: boolean;
   onToggle: () => void;
   busy: string | null;
+  bulkBusy: boolean;
   onAction: (itemId: string, a: 'approve' | 'remove') => void;
+  onBulk: (a: 'approve' | 'remove') => void;
   onOpenDrawer: (item: QueueItem) => void;
 }) => (
   <li className="border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
-    <button
-      onClick={onToggle}
-      className="w-full text-left p-3 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-    >
-      <span className="font-medium">u/{group.authorName}</span>
-      <span className="text-xs text-gray-500">
-        {group.items.length} item{group.items.length === 1 ? '' : 's'}{' '}
-        {expanded ? '▾' : '▸'}
-      </span>
-    </button>
+    <div className="p-3 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+      <button onClick={onToggle} className="flex-1 text-left min-w-0">
+        <span className="font-medium">u/{group.authorName}</span>
+      </button>
+      <div className="flex items-center gap-2 shrink-0">
+        <button
+          disabled={bulkBusy}
+          onClick={() => onBulk('approve')}
+          className="px-2 py-1 rounded bg-green-100 hover:bg-green-200 text-green-800 disabled:opacity-50 text-xs"
+          title={`Approve all ${group.items.length} items from u/${group.authorName}`}
+        >
+          Approve all
+        </button>
+        <button
+          disabled={bulkBusy}
+          onClick={() => onBulk('remove')}
+          className="px-2 py-1 rounded bg-red-100 hover:bg-red-200 text-red-800 disabled:opacity-50 text-xs"
+          title={`Remove all ${group.items.length} items from u/${group.authorName}`}
+        >
+          Remove all
+        </button>
+        <button
+          onClick={onToggle}
+          className="text-xs text-gray-500 hover:text-gray-900 dark:hover:text-white px-1"
+        >
+          {group.items.length} {expanded ? '▾' : '▸'}
+        </button>
+      </div>
+    </div>
     {expanded && (
       <ul>
         {group.items.map((item) => (
@@ -209,7 +233,7 @@ const Group = ({
             key={item.itemId}
             item={item}
             subredditName={subredditName}
-            busy={busy === item.itemId}
+            busy={busy === item.itemId || bulkBusy}
             onAction={(a) => onAction(item.itemId, a)}
             onOpenDrawer={() => onOpenDrawer(item)}
           />
@@ -428,6 +452,7 @@ const App = () => {
   const { groups, subredditName, loading, error, refresh } = useQueue();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
+  const [bulkBusyKey, setBulkBusyKey] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [drawerItem, setDrawerItem] = useState<QueueItem | null>(null);
 
@@ -466,6 +491,39 @@ const App = () => {
     }
   };
 
+  const bulkAct = async (group: QueueGroup, action: 'approve' | 'remove') => {
+    const verb = action === 'approve' ? 'approve' : 'remove';
+    const msg = `${verb === 'approve' ? 'Approve' : 'Remove'} all ${group.items.length} items from u/${group.authorName}?`;
+    if (!window.confirm(msg)) return;
+    setBulkBusyKey(group.groupKey);
+    setActionError(null);
+    try {
+      const res = await fetch('/api/action-bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          itemIds: group.items.map((i) => i.itemId),
+          action,
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data: BulkActionResponse = await res.json();
+      if (data.failCount > 0) {
+        setActionError(
+          `${data.okCount} ${verb}d, ${data.failCount} failed`
+        );
+      }
+      if (drawerItem && group.items.some((i) => i.itemId === drawerItem.itemId)) {
+        setDrawerItem(null);
+      }
+      await refresh();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBulkBusyKey(null);
+    }
+  };
+
   const itemCount = groups.reduce((n, g) => n + g.items.length, 0);
 
   return (
@@ -501,7 +559,9 @@ const App = () => {
               expanded={expanded.has(g.groupKey)}
               onToggle={() => toggle(g.groupKey)}
               busy={busy}
+              bulkBusy={bulkBusyKey === g.groupKey}
               onAction={act}
+              onBulk={(a) => bulkAct(g, a)}
               onOpenDrawer={setDrawerItem}
             />
           ))}

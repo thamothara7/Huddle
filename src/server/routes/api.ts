@@ -10,6 +10,9 @@ import { getActionTimeline, getRecentTitles } from '../core/history';
 import type {
   ActionRequest,
   ActionResponse,
+  BulkActionRequest,
+  BulkActionResponse,
+  BulkActionResult,
   ContextPeekResponse,
   InitResponse,
   SummaryResponse,
@@ -92,6 +95,27 @@ api.get('/context-peek', async (c) => {
   });
 });
 
+const performAction = async (
+  itemId: `t3_${string}` | `t1_${string}`,
+  action: 'approve' | 'remove',
+  username: string | undefined
+): Promise<void> => {
+  const item = await getItem(itemId);
+  if (!item) throw new Error(`item ${itemId} not found`);
+  if (action === 'approve') {
+    await reddit.approve(itemId);
+  } else {
+    await reddit.remove(itemId, false);
+  }
+  await setItem({
+    ...item,
+    status: 'actioned',
+    actionedBy: username ?? undefined,
+    actionTaken: action,
+  });
+  await removeItemFromAllGroups(item.subId, item.itemId);
+};
+
 api.post('/action', async (c) => {
   const body = await c.req.json<ActionRequest>();
   if (!body.itemId || (body.action !== 'approve' && body.action !== 'remove')) {
@@ -106,28 +130,9 @@ api.post('/action', async (c) => {
       400
     );
   }
-  const item = await getItem(body.itemId);
-  if (!item) {
-    return c.json<ErrorResponse>(
-      { status: 'error', message: `item ${body.itemId} not found` },
-      404
-    );
-  }
   try {
-    if (body.action === 'approve') {
-      await reddit.approve(body.itemId);
-    } else {
-      await reddit.remove(body.itemId, false);
-    }
     const username = await reddit.getCurrentUsername();
-    const updated = {
-      ...item,
-      status: 'actioned' as const,
-      actionedBy: username ?? undefined,
-      actionTaken: body.action,
-    };
-    await setItem(updated);
-    await removeItemFromAllGroups(item.subId, item.itemId);
+    await performAction(body.itemId, body.action, username);
     return c.json<ActionResponse>({
       type: 'action',
       itemId: body.itemId,
@@ -144,4 +149,45 @@ api.post('/action', async (c) => {
       500
     );
   }
+});
+
+api.post('/action-bulk', async (c) => {
+  const body = await c.req.json<BulkActionRequest>();
+  if (
+    !Array.isArray(body.itemIds) ||
+    body.itemIds.length === 0 ||
+    (body.action !== 'approve' && body.action !== 'remove')
+  ) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: 'invalid request' },
+      400
+    );
+  }
+  const username = await reddit.getCurrentUsername();
+  const results: BulkActionResult[] = [];
+  for (const id of body.itemIds) {
+    if (!isThingId(id)) {
+      results.push({ itemId: id, ok: false, error: 'invalid id' });
+      continue;
+    }
+    try {
+      await performAction(id, body.action, username);
+      results.push({ itemId: id, ok: true });
+    } catch (error) {
+      console.error(`bulk action failed for ${id}:`, error);
+      results.push({
+        itemId: id,
+        ok: false,
+        error: error instanceof Error ? error.message : 'action failed',
+      });
+    }
+  }
+  const okCount = results.filter((r) => r.ok).length;
+  return c.json<BulkActionResponse>({
+    type: 'action-bulk',
+    action: body.action,
+    results,
+    okCount,
+    failCount: results.length - okCount,
+  });
 });
