@@ -282,21 +282,27 @@ const avatarGradient = (seed: string): string => {
 
 const SUGGESTION_STYLE: Record<
   Exclude<ModSuggestion['action'], 'review'>,
-  { label: string; cls: string; dot: string }
+  { label: string; container: string; accent: string; dot: string }
 > = {
   approve: {
     label: 'Approve',
-    cls: 'bg-emerald-50 border-emerald-200/60 text-emerald-900 dark:bg-emerald-950/30 dark:border-emerald-800/50 dark:text-emerald-100',
+    container:
+      'bg-emerald-50/70 dark:bg-emerald-950/30 text-emerald-900 dark:text-emerald-100',
+    accent: 'bg-emerald-500',
     dot: 'bg-emerald-500',
   },
   remove: {
     label: 'Remove',
-    cls: 'bg-rose-50 border-rose-200/60 text-rose-900 dark:bg-rose-950/30 dark:border-rose-800/50 dark:text-rose-100',
+    container:
+      'bg-rose-50/70 dark:bg-rose-950/30 text-rose-900 dark:text-rose-100',
+    accent: 'bg-rose-500',
     dot: 'bg-rose-500',
   },
   spam: {
     label: 'Spam',
-    cls: 'bg-gray-100 border-gray-300/60 text-gray-900 dark:bg-gray-800/60 dark:border-gray-700/50 dark:text-gray-100',
+    container:
+      'bg-gray-100/80 dark:bg-gray-800/60 text-gray-900 dark:text-gray-100',
+    accent: 'bg-gray-900 dark:bg-gray-100',
     dot: 'bg-gray-900 dark:bg-gray-100',
   },
 };
@@ -312,24 +318,26 @@ const SuggestionChip = ({ suggestion }: { suggestion: ModSuggestion }) => {
   const style = SUGGESTION_STYLE[suggestion.action];
   return (
     <div
-      className={`mt-2.5 px-2.5 py-2 rounded-lg border ${style.cls}`}
+      className={`mt-2.5 relative pl-3.5 pr-3 py-2 rounded-lg overflow-hidden ${style.container}`}
       role="note"
       aria-label={`AI suggestion: ${style.label}`}
     >
-      <div className="flex items-center gap-1.5 mb-0.5">
-        <span
-          className={`inline-block w-2 h-2 rounded-full ${style.dot}`}
-          aria-hidden
-        />
-        <span className="text-[10px] uppercase tracking-wider font-semibold opacity-70">
+      <span
+        className={`absolute left-0 top-0 bottom-0 w-1 ${style.accent}`}
+        aria-hidden
+      />
+      <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0">
+        <span className="text-[9px] uppercase tracking-[0.08em] font-semibold opacity-60">
           AI suggests
         </span>
-        <span className="text-xs font-bold">{style.label}</span>
-        <span className="text-[10px] font-normal opacity-60">
+        <span className="text-sm font-bold leading-none">{style.label}</span>
+        <span className="text-[10px] opacity-60">
           · {CONFIDENCE_LABEL[suggestion.confidence]}
         </span>
       </div>
-      <p className="text-[11px] leading-snug opacity-90">{suggestion.why}</p>
+      <p className="text-[11px] leading-snug opacity-90 mt-1">
+        {suggestion.why}
+      </p>
     </div>
   );
 };
@@ -428,12 +436,12 @@ const ItemRow = ({
   };
 
   return (
-    <li className="px-3 sm:px-4 py-3 border-t border-gray-100 dark:border-gray-800/60 hover:bg-gray-50/60 dark:hover:bg-gray-900/40 transition-colors">
+    <li className="px-3 sm:px-4 py-3.5 border-t border-gray-100 dark:border-gray-800/60 hover:bg-gray-50/40 dark:hover:bg-gray-900/30 transition-colors">
       <button
         onClick={onOpenDrawer}
         className="w-full text-left group block"
       >
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mb-1 text-[10px] uppercase tracking-wider font-semibold">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mb-1.5 text-[10px] uppercase tracking-[0.06em] font-semibold">
           <span className="text-gray-500 dark:text-gray-400">
             {typeLabel(item.type)}
           </span>
@@ -462,7 +470,7 @@ const ItemRow = ({
         </div>
 
         {item.title && (
-          <p className="font-semibold text-gray-900 dark:text-gray-100 truncate mb-1.5 group-hover:text-orange-700 dark:group-hover:text-orange-300 transition-colors">
+          <p className="text-[15px] font-semibold text-gray-900 dark:text-gray-100 truncate mb-2 group-hover:text-orange-700 dark:group-hover:text-orange-300 transition-colors leading-snug">
             {item.title}
           </p>
         )}
@@ -536,12 +544,12 @@ const ItemRow = ({
       )}
 
       {!rejectOpen && (
-        <div className="mt-2.5 space-y-1.5">
+        <div className="mt-3 space-y-1.5">
           <div className="flex gap-1.5">
             <button
               disabled={busy}
               onClick={() => onAction('approve')}
-              className="flex-1 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-300 disabled:opacity-50 text-xs font-medium border border-emerald-200/50 dark:border-emerald-800/50 transition-colors"
+              className="flex-1 px-3 py-2 rounded-lg bg-emerald-100/80 hover:bg-emerald-200 active:scale-[0.98] text-emerald-800 dark:bg-emerald-900/40 dark:hover:bg-emerald-900/60 dark:text-emerald-200 disabled:opacity-50 disabled:active:scale-100 text-xs font-semibold transition-all"
               aria-label="Approve"
             >
               Approve
@@ -549,7 +557,7 @@ const ItemRow = ({
             <button
               disabled={busy}
               onClick={() => onAction('remove')}
-              className="flex-1 px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:hover:bg-rose-900/50 dark:text-rose-300 disabled:opacity-50 text-xs font-medium border border-rose-200/50 dark:border-rose-800/50 transition-colors"
+              className="flex-1 px-3 py-2 rounded-lg bg-rose-100/80 hover:bg-rose-200 active:scale-[0.98] text-rose-800 dark:bg-rose-900/40 dark:hover:bg-rose-900/60 dark:text-rose-200 disabled:opacity-50 disabled:active:scale-100 text-xs font-semibold transition-all"
               aria-label="Remove"
             >
               Remove
@@ -558,7 +566,7 @@ const ItemRow = ({
           <button
             disabled={busy}
             onClick={openRejectPanel}
-            className="w-full px-3 py-1.5 rounded-lg bg-rose-50/40 hover:bg-rose-50 text-rose-700/90 dark:bg-rose-950/20 dark:hover:bg-rose-950/40 dark:text-rose-300/90 disabled:opacity-50 text-[11px] font-medium border border-rose-200/60 dark:border-rose-900/50 transition-colors"
+            className="w-full px-3 py-1.5 rounded-lg text-rose-700/90 hover:text-rose-800 hover:bg-rose-50/60 dark:text-rose-300/80 dark:hover:text-rose-200 dark:hover:bg-rose-950/30 disabled:opacity-50 text-[11px] font-medium transition-colors"
             aria-label="Reject with reason"
           >
             Reject with reason
@@ -665,8 +673,8 @@ const Group = ({
   };
 
   return (
-    <li className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/40 overflow-hidden shadow-sm">
-      <div className="px-3 sm:px-4 py-3 bg-gray-50/60 dark:bg-gray-900/60 border-b border-gray-200/60 dark:border-gray-800/60">
+    <li className="rounded-2xl border border-gray-200/80 dark:border-gray-800/80 bg-white dark:bg-gray-900/30 overflow-hidden">
+      <div className="px-3 sm:px-4 py-3 bg-gradient-to-b from-gray-50/80 to-transparent dark:from-gray-900/40 dark:to-transparent">
         <div className="flex items-center gap-3">
           <button
             onClick={onToggle}
