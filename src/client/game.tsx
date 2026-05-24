@@ -95,9 +95,8 @@ const Avatar = ({
   size: 'sm' | 'md';
   gradientCls: string;
 }) => {
-  const { url, resolved, retry } = useSnoovatar(username);
+  const { url } = useSnoovatar(username);
   const [broken, setBroken] = useState(false);
-  const [showRetry, setShowRetry] = useState(false);
   const initial = initialFor(username);
   const sizeCls = size === 'sm' ? 'w-8 h-8 text-sm' : 'w-9 h-9 text-sm';
 
@@ -106,21 +105,11 @@ const Avatar = ({
     setBroken(false);
   }, [url]);
 
-  useEffect(() => {
-    if (resolved && (!url || broken)) {
-      const id = setTimeout(() => setShowRetry(true), 2000);
-      return () => clearTimeout(id);
-    }
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- transition out of the showRetry state when conditions are no longer met
-    setShowRetry(false);
-    return undefined;
-  }, [resolved, url, broken]);
-
   const showImage = url && !broken;
 
   return (
     <div
-      className={`shrink-0 ${sizeCls} rounded-full bg-gradient-to-br ${gradientCls} grid place-items-center text-white font-bold shadow-sm select-none overflow-hidden relative`}
+      className={`shrink-0 ${sizeCls} rounded-full bg-gradient-to-br ${gradientCls} grid place-items-center text-white font-bold shadow-sm select-none overflow-hidden`}
     >
       {showImage ? (
         <img
@@ -132,28 +121,6 @@ const Avatar = ({
         />
       ) : (
         <span aria-hidden>{initial}</span>
-      )}
-      {!showImage && showRetry && (
-        <span
-          role="button"
-          tabIndex={0}
-          onClick={(e) => {
-            e.stopPropagation();
-            setBroken(false);
-            void retry();
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.stopPropagation();
-              setBroken(false);
-              void retry();
-            }
-          }}
-          title="Retry loading avatar"
-          className="absolute inset-0 grid place-items-center bg-black/40 hover:bg-black/55 transition-colors text-[9px] font-normal text-white cursor-pointer"
-        >
-          retry
-        </span>
       )}
     </div>
   );
