@@ -119,6 +119,32 @@ Reddit triggers (PostReport, CommentReport, ModAction, PostSubmit, CommentSubmit
 | `src/client/game.tsx` | React queue + Context Peek drawer |
 | `src/shared/api.ts` | Types shared between client and server |
 
+## Scale characteristics
+
+Huddle is designed for the mod queue that Bajpai's research described — a few dozen to a few hundred open items at peak, where context-gathering is the bottleneck, not raw volume. The architecture is comfortable at this scale; for the largest subs it would need three additions, documented below.
+
+| Queue size | Mods watching | Behavior |
+|---|---|---|
+| Under 50 open items | 1–5 | Comfortable. The 5-second polling is invisible. |
+| 50–500 open items | 5–20 | Workable. Network payload per poll grows. |
+| 500–2,000 open items | 20+ | Degrades. Page load slows, traffic spikes per refresh. |
+| 5,000+ items, many simultaneous mods | — | Needs the architectural changes below. |
+
+**Why it scales the way it does:**
+- `/api/init` returns the full grouped queue every 5 s — fine when the payload is under ~100 KB.
+- Each `ItemRow` lazy-fetches its AI summary on mount — fast for small lists, expensive when hundreds of rows render at once.
+- Redis ZSETs handle thousands of members per group, so the data layer isn't the limiter; the network round-trip and the React render are.
+
+**Production-scale roadmap (in priority order):**
+1. **Realtime instead of polling.** `permissions.realtime` is already declared in `devvit.json`. The server would publish diffs to `huddle:{subId}:updates`; the client subscribes; the polling traffic disappears.
+2. **Pagination on `/api/init`.** Return the first N groups + a cursor — mods rarely scroll past the first screen.
+3. **Client-side list virtualization.** Standard `react-window` usage on the queue list.
+4. **Background-job the cascade-remove after ban.** Devvit Scheduler can dispatch the work; the endpoint returns `202 Accepted` immediately; the client polls for completion. Today the endpoint blocks until every `reddit.remove` finishes.
+5. **TTL on actioned items and cached summaries.** Auto-expire after 30 days so Redis stays bounded.
+6. **Atomic `reportCount` via `INCR`.** Fixes a read-modify-write race when many reports hit the same item simultaneously (the count is non-monotonic under burst load today).
+
+None of these are v1 blockers — the demo target is the mod queue Bajpai's paper actually measured. Items 1 and 2 are the highest-ROI fixes if Huddle ever needs to handle a top-100 subreddit.
+
 ## Known limitations
 
 - **Old Reddit users cannot use Huddle.** Custom posts don't render there — this is a Devvit platform constraint.

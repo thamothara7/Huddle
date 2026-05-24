@@ -78,6 +78,22 @@ A reverse-lookup `huddle:item-groups:{itemId}` ZSET lets mod-action cleanup remo
 
 ---
 
+## Scale
+
+Huddle targets the mod queue that Bajpai's research described — a few dozen to a few hundred open items at peak. At that scale the architecture is comfortable: Redis ZSETs handle the data layer, the 5-second polling stays under ~100 KB per request, and React renders the queue without virtualization.
+
+For Reddit's largest subs (thousands of items, many simultaneous mods), Huddle would need three additions, in priority order:
+
+1. **Realtime instead of polling** — `permissions.realtime` is already declared in `devvit.json`. The server publishes diffs to a channel, the client subscribes, the polling traffic disappears.
+2. **Pagination + cursor on `/api/init`** — return the first 30 groups + a cursor; mods rarely scroll past the first screen.
+3. **List virtualization on the client** — `react-window` on the row list.
+
+Plus storage hygiene (TTL on actioned items + cached summaries) and a Devvit Scheduler job for the cascade-remove after ban so the endpoint returns `202 Accepted` immediately and the client polls for completion. None of these were v1 blockers; all are roadmap.
+
+The architecture choice that makes all of the above clean is that the data layer is Redis ZSETs throughout — the same primitives scale unchanged from one item to ten thousand; only the access pattern at the edges needs to change.
+
+---
+
 ## What's next
 
 Huddle solves the "leaving the queue for context" half of the modqueue problem. Bajpai 2025a notes that moderators still leave the queue to (1) take user-level actions like banning, (2) check Toolbox usernotes, and (3) read full thread context. The roadmap below addresses each of these honestly:
