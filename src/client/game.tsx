@@ -111,6 +111,16 @@ const redditUrl = (
 const initialFor = (name: string): string =>
   (name || '?').replace(/^u\//, '').charAt(0).toUpperCase() || '?';
 
+const profileUrl = (username: string): string =>
+  `https://www.reddit.com/user/${encodeURIComponent(username)}/`;
+
+const stopAnd =
+  <T extends { stopPropagation: () => void }>(fn: () => void) =>
+  (e: T) => {
+    e.stopPropagation();
+    fn();
+  };
+
 const avatarGradient = (seed: string): string => {
   const palette = [
     'from-indigo-400 to-purple-500',
@@ -288,6 +298,25 @@ const Group = ({
 }) => {
   const initial = initialFor(group.authorName);
   const gradient = avatarGradient(group.authorName);
+  const [pendingBulk, setPendingBulk] = useState<'approve' | 'remove' | null>(
+    null
+  );
+
+  useEffect(() => {
+    if (!pendingBulk) return;
+    const id = setTimeout(() => setPendingBulk(null), 3000);
+    return () => clearTimeout(id);
+  }, [pendingBulk]);
+
+  const handleBulk = (action: 'approve' | 'remove') => {
+    if (pendingBulk === action) {
+      setPendingBulk(null);
+      onBulk(action);
+    } else {
+      setPendingBulk(action);
+    }
+  };
+
   return (
     <li className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/40 overflow-hidden shadow-sm">
       <div className="px-3 sm:px-4 py-3 bg-gray-50/60 dark:bg-gray-900/60 border-b border-gray-200/60 dark:border-gray-800/60">
@@ -306,6 +335,21 @@ const Group = ({
             <div className="min-w-0">
               <p className="font-semibold truncate text-gray-900 dark:text-gray-100">
                 u/{group.authorName}
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={stopAnd(() => navigateTo(profileUrl(group.authorName)))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.stopPropagation();
+                      navigateTo(profileUrl(group.authorName));
+                    }
+                  }}
+                  title={`Open u/${group.authorName}'s profile`}
+                  className="ml-1.5 text-[11px] font-normal text-orange-600 dark:text-orange-400 hover:underline cursor-pointer align-baseline"
+                >
+                  profile ↗
+                </span>
               </p>
               <p className="text-[11px] text-gray-500 dark:text-gray-400">
                 {group.items.length}{' '}
@@ -324,21 +368,33 @@ const Group = ({
         <div className="mt-2.5 flex gap-1.5">
           <button
             disabled={bulkBusy}
-            onClick={() => onBulk('approve')}
-            className="flex-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-300 disabled:opacity-50 text-xs font-medium border border-emerald-200/50 dark:border-emerald-800/50 transition-colors"
+            onClick={() => handleBulk('approve')}
+            className={`flex-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 ${
+              pendingBulk === 'approve'
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 dark:bg-emerald-500 dark:hover:bg-emerald-400 dark:border-emerald-500 animate-pulse'
+                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-300 border-emerald-200/50 dark:border-emerald-800/50'
+            }`}
             title={`Approve all ${group.items.length} items from u/${group.authorName}`}
           >
             <span aria-hidden className="mr-1">✓</span>
-            Approve all
+            {pendingBulk === 'approve'
+              ? `Confirm · approve ${group.items.length}`
+              : 'Approve all'}
           </button>
           <button
             disabled={bulkBusy}
-            onClick={() => onBulk('remove')}
-            className="flex-1 px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:hover:bg-rose-900/50 dark:text-rose-300 disabled:opacity-50 text-xs font-medium border border-rose-200/50 dark:border-rose-800/50 transition-colors"
+            onClick={() => handleBulk('remove')}
+            className={`flex-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 ${
+              pendingBulk === 'remove'
+                ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-600 dark:bg-rose-500 dark:hover:bg-rose-400 dark:border-rose-500 animate-pulse'
+                : 'bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:hover:bg-rose-900/50 dark:text-rose-300 border-rose-200/50 dark:border-rose-800/50'
+            }`}
             title={`Remove all ${group.items.length} items from u/${group.authorName}`}
           >
             <span aria-hidden className="mr-1">✗</span>
-            Remove all
+            {pendingBulk === 'remove'
+              ? `Confirm · remove ${group.items.length}`
+              : 'Remove all'}
           </button>
         </div>
       </div>
@@ -582,14 +638,22 @@ const ContextPeekDrawer = ({
               <span className="text-lg leading-none">×</span>
             </button>
           </div>
-          {url && (
+          <div className="mt-2 flex items-center gap-3 text-[11px]">
+            {url && (
+              <button
+                onClick={() => navigateTo(url)}
+                className="inline-flex items-center gap-1 text-orange-600 dark:text-orange-400 hover:underline"
+              >
+                Open on Reddit ↗
+              </button>
+            )}
             <button
-              onClick={() => navigateTo(url)}
-              className="mt-2 inline-flex items-center gap-1 text-[11px] text-orange-600 dark:text-orange-400 hover:underline"
+              onClick={() => navigateTo(profileUrl(authorName))}
+              className="inline-flex items-center gap-1 text-orange-600 dark:text-orange-400 hover:underline"
             >
-              Open on Reddit ↗
+              View profile ↗
             </button>
-          )}
+          </div>
         </header>
 
         <div className="p-4 space-y-5 flex-1">
@@ -689,8 +753,6 @@ const App = () => {
 
   const bulkAct = async (group: QueueGroup, action: 'approve' | 'remove') => {
     const verb = action === 'approve' ? 'approve' : 'remove';
-    const msg = `${verb === 'approve' ? 'Approve' : 'Remove'} all ${group.items.length} items from u/${group.authorName}?`;
-    if (!window.confirm(msg)) return;
     setBulkBusyKey(group.groupKey);
     setActionError(null);
     try {
