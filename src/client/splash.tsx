@@ -32,11 +32,10 @@ export const Splash = () => {
         </p>
 
         <button
-          className="group inline-flex items-center justify-center gap-2 px-6 h-11 rounded-xl bg-gradient-to-br from-orange-500 to-rose-500 text-white font-semibold shadow-lg shadow-orange-500/25 hover:shadow-xl hover:shadow-orange-500/40 hover:scale-[1.02] active:scale-100 transition-all"
+          className="inline-flex items-center justify-center px-6 h-11 rounded-xl bg-gradient-to-br from-orange-500 to-rose-500 text-white font-semibold shadow-lg shadow-orange-500/25 hover:shadow-xl hover:shadow-orange-500/40 hover:scale-[1.02] active:scale-100 transition-all"
           onClick={(e) => requestExpandedMode(e.nativeEvent, 'game')}
         >
           Open queue
-          <span className="transition-transform group-hover:translate-x-0.5">→</span>
         </button>
       </div>
 

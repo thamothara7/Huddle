@@ -174,6 +174,46 @@ const stopAnd =
     fn();
   };
 
+const ChevronIcon = ({ open }: { open: boolean }) => (
+  <svg
+    viewBox="0 0 16 16"
+    className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-90' : ''}`}
+    aria-hidden
+  >
+    <path
+      d="M6 4 L10 8 L6 12"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+    />
+  </svg>
+);
+
+const CloseIcon = () => (
+  <svg viewBox="0 0 16 16" className="w-4 h-4" aria-hidden>
+    <line
+      x1="3.5"
+      y1="3.5"
+      x2="12.5"
+      y2="12.5"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+    <line
+      x1="12.5"
+      y1="3.5"
+      x2="3.5"
+      y2="12.5"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
 const avatarGradient = (seed: string): string => {
   const palette = [
     'from-indigo-400 to-purple-500',
@@ -234,7 +274,7 @@ const ItemRow = ({
               }}
               className="text-orange-600 dark:text-orange-400 normal-case tracking-normal hover:underline cursor-pointer"
             >
-              Open ↗
+              Open
             </span>
           )}
         </div>
@@ -261,7 +301,7 @@ const ItemRow = ({
                   : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
             }`}
           >
-            {loading ? '…' : isAi ? '✦ AI' : 'raw'}
+            {loading ? '...' : isAi ? 'AI' : 'raw'}
           </span>
           {loading ? (
             <span className="inline-block animate-pulse bg-gray-200 dark:bg-gray-800 h-4 w-40 rounded align-middle" />
@@ -275,7 +315,9 @@ const ItemRow = ({
         </p>
 
         <p className="text-[11px] text-gray-500 dark:text-gray-400 break-words">
-          <span aria-hidden className="mr-1">⚑</span>
+          <span className="font-medium text-gray-600 dark:text-gray-300 mr-1">
+            Reports:
+          </span>
           {item.reportReasons.length > 0
             ? item.reportReasons.join(' · ')
             : '(no user reports)'}
@@ -311,7 +353,6 @@ const ItemRow = ({
           className="flex-1 sm:flex-none px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-300 disabled:opacity-50 text-xs font-medium border border-emerald-200/50 dark:border-emerald-800/50 transition-colors"
           aria-label="Approve"
         >
-          <span aria-hidden className="mr-1">✓</span>
           Approve
         </button>
         <button
@@ -320,7 +361,6 @@ const ItemRow = ({
           className="flex-1 sm:flex-none px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:hover:bg-rose-900/50 dark:text-rose-300 disabled:opacity-50 text-xs font-medium border border-rose-200/50 dark:border-rose-800/50 transition-colors"
           aria-label="Remove"
         >
-          <span aria-hidden className="mr-1">✗</span>
           Remove
         </button>
       </div>
@@ -399,7 +439,7 @@ const Group = ({
                   title={`Open u/${group.authorName}'s profile`}
                   className="ml-1.5 text-[11px] font-normal text-orange-600 dark:text-orange-400 hover:underline cursor-pointer align-baseline"
                 >
-                  profile ↗
+                  profile
                 </span>
               </p>
               <p className="text-[11px] text-gray-500 dark:text-gray-400">
@@ -413,7 +453,7 @@ const Group = ({
             className="shrink-0 w-7 h-7 grid place-items-center rounded-md text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:hover:text-white dark:hover:bg-gray-800 transition-colors"
             aria-label={expanded ? 'Collapse' : 'Expand'}
           >
-            <span className="text-sm leading-none">{expanded ? '▾' : '▸'}</span>
+            <ChevronIcon open={expanded} />
           </button>
         </div>
         <div className="mt-2.5 flex gap-1.5">
@@ -427,9 +467,8 @@ const Group = ({
             }`}
             title={`Approve all ${group.items.length} items from u/${group.authorName}`}
           >
-            <span aria-hidden className="mr-1">✓</span>
             {pendingBulk === 'approve'
-              ? `Confirm · approve ${group.items.length}`
+              ? `Confirm: approve ${group.items.length}`
               : 'Approve all'}
           </button>
           <button
@@ -442,9 +481,8 @@ const Group = ({
             }`}
             title={`Remove all ${group.items.length} items from u/${group.authorName}`}
           >
-            <span aria-hidden className="mr-1">✗</span>
             {pendingBulk === 'remove'
-              ? `Confirm · remove ${group.items.length}`
+              ? `Confirm: remove ${group.items.length}`
               : 'Remove all'}
           </button>
         </div>
@@ -497,19 +535,19 @@ const STATUS_BADGE: Record<
   { label: string; cls: string }
 > = {
   approved: {
-    label: '✓',
+    label: 'ok',
     cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
   },
   removed: {
-    label: '✗',
+    label: 'rm',
     cls: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
   },
   spam: {
-    label: 'spam',
+    label: 'sp',
     cls: 'bg-gray-800 text-white dark:bg-gray-700',
   },
   pending: {
-    label: '⏳',
+    label: 'pn',
     cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
   },
 };
@@ -532,7 +570,7 @@ const RecentList = ({ recent }: { recent: RecentEntry[] }) => {
             className="flex items-center gap-2 text-xs py-1 px-2 rounded-md hover:bg-gray-50 dark:hover:bg-gray-900/60"
           >
             <span
-              className={`shrink-0 w-6 grid place-items-center px-1 py-0.5 rounded text-[10px] ${badge.cls}`}
+              className={`shrink-0 px-1.5 py-0.5 rounded font-mono text-[10px] uppercase ${badge.cls}`}
             >
               {badge.label}
             </span>
@@ -684,55 +722,55 @@ const ContextPeekDrawer = ({
               className="shrink-0 w-7 h-7 grid place-items-center rounded-md text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:hover:text-white dark:hover:bg-gray-800 transition-colors"
               aria-label="Close drawer"
             >
-              <span className="text-lg leading-none">×</span>
+              <CloseIcon />
             </button>
           </div>
-          <div className="mt-2 flex items-center gap-3 text-[11px]">
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
             {url && (
               <button
                 onClick={() => navigateTo(url)}
-                className="inline-flex items-center gap-1 text-orange-600 dark:text-orange-400 hover:underline"
+                className="text-orange-600 dark:text-orange-400 hover:underline"
               >
-                Open on Reddit ↗
+                Open on Reddit
               </button>
             )}
             <button
               onClick={() => navigateTo(profileUrl(authorName))}
-              className="inline-flex items-center gap-1 text-orange-600 dark:text-orange-400 hover:underline"
+              className="text-orange-600 dark:text-orange-400 hover:underline"
             >
-              View profile ↗
+              View profile
             </button>
           </div>
         </header>
 
-        <div className="p-4 space-y-5 flex-1">
+        <div className="p-3 sm:p-4 space-y-5 flex-1">
           {error && (
             <p className="text-xs text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-900/30 px-3 py-2 rounded">
               {error}
             </p>
           )}
           {!data && !error && (
-            <p className="text-xs text-gray-500">Loading context…</p>
+            <p className="text-xs text-gray-500">Loading context...</p>
           )}
           {data && (
             <>
               <section>
-                <h3 className="text-[10px] uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2 font-semibold flex items-center gap-1.5">
-                  <span aria-hidden>✦</span> Facts the AI saw
+                <h3 className="text-[10px] uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2 font-semibold">
+                  Facts the AI saw
                 </h3>
                 <FactsTable facts={data.facts} />
               </section>
 
               <section>
-                <h3 className="text-[10px] uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2 font-semibold flex items-center gap-1.5">
-                  <span aria-hidden>⌖</span> Last 5 in this sub
+                <h3 className="text-[10px] uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2 font-semibold">
+                  Last 5 in this sub
                 </h3>
                 <RecentList recent={data.recent} />
               </section>
 
               <section>
-                <h3 className="text-[10px] uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2 font-semibold flex items-center gap-1.5">
-                  <span aria-hidden>⏱</span> 30-day mod action timeline
+                <h3 className="text-[10px] uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2 font-semibold">
+                  30-day mod action timeline
                 </h3>
                 <Timeline actions={data.actions} />
               </section>
@@ -740,8 +778,8 @@ const ContextPeekDrawer = ({
           )}
         </div>
 
-        <footer className="px-4 py-2.5 border-t border-gray-200 dark:border-gray-800 text-[10px] text-gray-400 dark:text-gray-500 bg-gray-50/60 dark:bg-gray-900/60">
-          Titles only — never body content. Click <span className="font-medium">Open on Reddit</span> to read full content.
+        <footer className="px-3 sm:px-4 py-2.5 border-t border-gray-200 dark:border-gray-800 text-[10px] text-gray-400 dark:text-gray-500 bg-gray-50/60 dark:bg-gray-900/60">
+          Titles only, never body content. Click <span className="font-medium">Open on Reddit</span> to read full content.
         </footer>
       </aside>
     </div>
@@ -750,9 +788,11 @@ const ContextPeekDrawer = ({
 
 const EmptyState = () => (
   <div className="text-center py-16 px-4">
-    <div className="mx-auto mb-4 w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 grid place-items-center text-white text-2xl shadow-md shadow-emerald-500/20">
-      ✓
-    </div>
+    <img
+      src="/huddle-logo.svg"
+      alt=""
+      className="mx-auto mb-4 w-14 h-14 rounded-2xl shadow-md shadow-orange-500/20 opacity-80"
+    />
     <p className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1">
       Modqueue is clear
     </p>

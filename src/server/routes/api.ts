@@ -58,6 +58,9 @@ api.get('/snoovatar', async (c) => {
   const cacheKey = k.userSnoovatar(username);
   const cached = await redis.get(cacheKey);
   if (cached) {
+    console.log(
+      `[huddle] /api/snoovatar ${username} cache hit: ${cached === SNOOVATAR_CACHE_MISS ? 'NONE' : cached.slice(0, 80)}`
+    );
     return c.json<SnoovatarResponse>({
       type: 'snoovatar',
       username,
@@ -65,15 +68,49 @@ api.get('/snoovatar', async (c) => {
     });
   }
   let url: string | null = null;
+  let source: 'snoovatar' | 'icon' | 'none' = 'none';
   try {
-    const fetched = await reddit.getSnoovatarUrl(username);
-    if (typeof fetched === 'string' && fetched.length > 0) url = fetched;
+    const snoo = await reddit.getSnoovatarUrl(username);
+    if (typeof snoo === 'string' && snoo.length > 0) {
+      url = snoo;
+      source = 'snoovatar';
+    }
   } catch (err) {
     console.error(
-      `[huddle] /api/snoovatar failed for ${username}:`,
+      `[huddle] /api/snoovatar getSnoovatarUrl threw for ${username}:`,
       err instanceof Error ? err.message : err
     );
   }
+  // Fallback: many test/throwaway accounts have no snoovatar set. Try the
+  // user's icon image via getUserByUsername — User.snoovatarImage and
+  // User.iconImage on UserV2 are exposed through the User model in newer
+  // Devvit versions; we read them defensively.
+  if (!url) {
+    try {
+      const user = await reddit.getUserByUsername(username);
+      if (user) {
+        const asAny = user as unknown as {
+          snoovatarImage?: string;
+          iconImage?: string;
+        };
+        if (typeof asAny.snoovatarImage === 'string' && asAny.snoovatarImage.length > 0) {
+          url = asAny.snoovatarImage;
+          source = 'snoovatar';
+        } else if (typeof asAny.iconImage === 'string' && asAny.iconImage.length > 0) {
+          url = asAny.iconImage;
+          source = 'icon';
+        }
+      }
+    } catch (err) {
+      console.error(
+        `[huddle] /api/snoovatar getUserByUsername threw for ${username}:`,
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+  console.log(
+    `[huddle] /api/snoovatar ${username} resolved: source=${source} url=${url ? JSON.stringify(url.slice(0, 100)) : 'NONE'}`
+  );
   try {
     await redis.set(cacheKey, url ?? SNOOVATAR_CACHE_MISS, {
       expiration: new Date(Date.now() + USER_SNOOVATAR_TTL_SECONDS * 1000),
