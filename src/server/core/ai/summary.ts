@@ -5,13 +5,14 @@ import type { SummarySource } from '../../../shared/api';
 
 const GEMINI_MODEL = 'gemini-flash-latest';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const MIN_SUMMARY_LEN = 10;
 
 const SYSTEM_PROMPT = `You format moderator queue context. You receive a structured fact dict about a user. Output ONE neutral, factual sentence in plain English combining only the facts given. Rules:
 - NEVER add opinions, guesses, or words like "suspicious", "concerning", "likely", "appears to".
 - NEVER reference content you were not given.
 - If a fact is zero or missing, omit it from the sentence rather than saying "no prior actions".
 - Maximum 25 words.
-- Output the sentence only. No preamble, no markdown.`;
+- Output the sentence only. No preamble, no markdown, no asterisks.`;
 
 export type SummaryResult = {
   text: string;
@@ -23,8 +24,18 @@ export const getOrGenerateSummary = async (
   facts: UserFacts
 ): Promise<SummaryResult> => {
   const cached = await redis.get(k.summary(itemId));
-  if (cached) {
+  if (cached && cached.length >= MIN_SUMMARY_LEN) {
     return { text: cached, source: 'cache' };
+  }
+  if (cached && cached.length < MIN_SUMMARY_LEN) {
+    console.warn(
+      `[huddle] summary[${itemId}] busting suspicious cache (len=${cached.length}, preview=${JSON.stringify(cached.slice(0, 40))})`
+    );
+    try {
+      await redis.del(k.summary(itemId));
+    } catch {
+      // ignore
+    }
   }
 
   const apiKey = await readGeminiKey();
@@ -52,9 +63,9 @@ export const getOrGenerateSummary = async (
           },
         ],
         generationConfig: {
-          maxOutputTokens: 100,
+          maxOutputTokens: 200,
           temperature: 0.2,
-          responseMimeType: 'text/plain',
+          thinkingConfig: { thinkingBudget: 0 },
         },
       }),
     });
@@ -91,9 +102,9 @@ export const getOrGenerateSummary = async (
   }
 
   const text = extractText(parsed);
-  if (!text) {
+  if (!text || text.length < MIN_SUMMARY_LEN) {
     console.warn(
-      `[huddle] summary[${itemId}] fallback: empty/blocked candidate`
+      `[huddle] summary[${itemId}] fallback: short/blocked response (len=${text?.length ?? 0}, preview=${JSON.stringify((text ?? '').slice(0, 40))})`
     );
     return { text: factsAsRawSentence(facts), source: 'fallback' };
   }
@@ -106,7 +117,7 @@ export const getOrGenerateSummary = async (
       err instanceof Error ? err.message : err
     );
   }
-  console.log(`[huddle] summary[${itemId}] llm ok`);
+  console.log(`[huddle] summary[${itemId}] llm ok (len=${text.length})`);
   return { text, source: 'llm' };
 };
 
@@ -120,14 +131,25 @@ const readGeminiKey = async (): Promise<string | undefined> => {
   return undefined;
 };
 
+type GeminiPart = {
+  text?: string;
+  thought?: boolean;
+};
+
 type GeminiResponse = {
   candidates?: Array<{
-    content?: { parts?: Array<{ text?: string }> };
+    content?: { parts?: GeminiPart[] };
   }>;
 };
 
 const extractText = (parsed: unknown): string | undefined => {
   const data = parsed as GeminiResponse;
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  return typeof text === 'string' ? text.trim() : undefined;
+  const parts = data?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return undefined;
+  const joined = parts
+    .filter((p) => p && p.thought !== true)
+    .map((p) => (typeof p.text === 'string' ? p.text : ''))
+    .join('')
+    .trim();
+  return joined.length > 0 ? joined : undefined;
 };
