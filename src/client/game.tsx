@@ -40,6 +40,7 @@ const useQueue = () => {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async refresh; setState happens after a tick
     void refresh();
     const id = setInterval(() => {
       void refresh();
@@ -56,7 +57,6 @@ const useSummary = (itemId: string) => {
 
   useEffect(() => {
     let alive = true;
-    setLoading(true);
     fetch(`/api/summary?itemId=${encodeURIComponent(itemId)}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(r)))
       .then((data: SummaryResponse) => {
@@ -306,12 +306,12 @@ const ACTION_COLORS: Record<ActionEntry['action'], string> = {
 };
 
 const Timeline = ({ actions }: { actions: ActionEntry[] }) => {
+  const [now] = useState(() => Date.now());
   if (actions.length === 0) {
     return (
       <p className="text-xs text-gray-500 italic">No mod actions in the last 30 days.</p>
     );
   }
-  const now = Date.now();
   const windowMs = 30 * 24 * 60 * 60 * 1000;
   return (
     <div>
@@ -361,8 +361,6 @@ const ContextPeekDrawer = ({
 
   useEffect(() => {
     let alive = true;
-    setData(null);
-    setError(null);
     fetch(`/api/context-peek?itemId=${encodeURIComponent(itemId)}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(r)))
       .then((d: ContextPeekResponse) => {
@@ -455,12 +453,6 @@ const App = () => {
   const [bulkBusyKey, setBulkBusyKey] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [drawerItem, setDrawerItem] = useState<QueueItem | null>(null);
-
-  useEffect(() => {
-    if (groups.length === 1) {
-      setExpanded((prev) => new Set(prev).add(groups[0]!.groupKey));
-    }
-  }, [groups.length]);
 
   const toggle = (key: string) =>
     setExpanded((prev) => {
@@ -570,6 +562,7 @@ const App = () => {
 
       {drawerItem && (
         <ContextPeekDrawer
+          key={drawerItem.itemId}
           item={drawerItem}
           subredditName={subredditName}
           onClose={() => setDrawerItem(null)}
