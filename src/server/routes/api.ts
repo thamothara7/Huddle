@@ -46,9 +46,12 @@ api.get('/init', async (c) => {
 });
 
 const SNOOVATAR_CACHE_MISS = 'none';
+const SNOOVATAR_MISS_TTL_SECONDS = 5 * 60; // re-fetch quickly when API returned nothing
+const SNOOVATAR_HIT_TTL_SECONDS = USER_SNOOVATAR_TTL_SECONDS; // 24h for real URLs
 
 api.get('/snoovatar', async (c) => {
   const username = c.req.query('username')?.trim();
+  const refresh = c.req.query('refresh') === '1';
   if (!username) {
     return c.json<ErrorResponse>(
       { status: 'error', message: 'missing username' },
@@ -56,24 +59,36 @@ api.get('/snoovatar', async (c) => {
     );
   }
   const cacheKey = k.userSnoovatar(username);
-  const cached = await redis.get(cacheKey);
-  if (cached) {
-    console.log(
-      `[huddle] /api/snoovatar ${username} cache hit: ${cached === SNOOVATAR_CACHE_MISS ? 'NONE' : cached.slice(0, 80)}`
-    );
-    return c.json<SnoovatarResponse>({
-      type: 'snoovatar',
-      username,
-      url: cached === SNOOVATAR_CACHE_MISS ? null : cached,
-    });
+
+  if (!refresh) {
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      console.log(
+        `[huddle] /api/snoovatar ${username} cache hit: ${cached === SNOOVATAR_CACHE_MISS ? 'NONE' : cached.slice(0, 80)}`
+      );
+      return c.json<SnoovatarResponse>({
+        type: 'snoovatar',
+        username,
+        url: cached === SNOOVATAR_CACHE_MISS ? null : cached,
+      });
+    }
+  } else {
+    console.log(`[huddle] /api/snoovatar ${username} refresh=1 bypassing cache`);
+    try {
+      await redis.del(cacheKey);
+    } catch {
+      // ignore
+    }
   }
+
   let url: string | null = null;
-  let source: 'snoovatar' | 'icon' | 'none' = 'none';
   try {
     const snoo = await reddit.getSnoovatarUrl(username);
+    console.log(
+      `[huddle] /api/snoovatar ${username} getSnoovatarUrl returned: ${typeof snoo}=${snoo === undefined ? 'undefined' : JSON.stringify(snoo).slice(0, 120)}`
+    );
     if (typeof snoo === 'string' && snoo.length > 0) {
       url = snoo;
-      source = 'snoovatar';
     }
   } catch (err) {
     console.error(
@@ -81,39 +96,14 @@ api.get('/snoovatar', async (c) => {
       err instanceof Error ? err.message : err
     );
   }
-  // Fallback: many test/throwaway accounts have no snoovatar set. Try the
-  // user's icon image via getUserByUsername — User.snoovatarImage and
-  // User.iconImage on UserV2 are exposed through the User model in newer
-  // Devvit versions; we read them defensively.
-  if (!url) {
-    try {
-      const user = await reddit.getUserByUsername(username);
-      if (user) {
-        const asAny = user as unknown as {
-          snoovatarImage?: string;
-          iconImage?: string;
-        };
-        if (typeof asAny.snoovatarImage === 'string' && asAny.snoovatarImage.length > 0) {
-          url = asAny.snoovatarImage;
-          source = 'snoovatar';
-        } else if (typeof asAny.iconImage === 'string' && asAny.iconImage.length > 0) {
-          url = asAny.iconImage;
-          source = 'icon';
-        }
-      }
-    } catch (err) {
-      console.error(
-        `[huddle] /api/snoovatar getUserByUsername threw for ${username}:`,
-        err instanceof Error ? err.message : err
-      );
-    }
-  }
+
+  const ttl = url ? SNOOVATAR_HIT_TTL_SECONDS : SNOOVATAR_MISS_TTL_SECONDS;
   console.log(
-    `[huddle] /api/snoovatar ${username} resolved: source=${source} url=${url ? JSON.stringify(url.slice(0, 100)) : 'NONE'}`
+    `[huddle] /api/snoovatar ${username} resolved: url=${url ? JSON.stringify(url.slice(0, 100)) : 'NONE'} cacheTtl=${ttl}s`
   );
   try {
     await redis.set(cacheKey, url ?? SNOOVATAR_CACHE_MISS, {
-      expiration: new Date(Date.now() + USER_SNOOVATAR_TTL_SECONDS * 1000),
+      expiration: new Date(Date.now() + ttl * 1000),
     });
   } catch {
     // best-effort cache write; ignore failures

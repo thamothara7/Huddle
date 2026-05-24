@@ -54,20 +54,36 @@ const useQueue = () => {
 
 const useSnoovatar = (username: string) => {
   const [url, setUrl] = useState<string | null>(null);
+  const [resolved, setResolved] = useState(false);
+
+  const fetchOnce = useCallback(
+    async (refresh: boolean) => {
+      if (!username) return;
+      try {
+        const res = await fetch(
+          `/api/snoovatar?username=${encodeURIComponent(username)}${refresh ? '&refresh=1' : ''}`
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data: SnoovatarResponse = await res.json();
+        setUrl(data.url ?? null);
+      } catch {
+        setUrl(null);
+      } finally {
+        setResolved(true);
+      }
+    },
+    [username]
+  );
+
   useEffect(() => {
     if (!username) return;
-    let alive = true;
-    fetch(`/api/snoovatar?username=${encodeURIComponent(username)}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: SnoovatarResponse | null) => {
-        if (alive && d?.url) setUrl(d.url);
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [username]);
-  return url;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional reset when username changes
+    setResolved(false);
+    setUrl(null);
+    void fetchOnce(false);
+  }, [username, fetchOnce]);
+
+  return { url, resolved, retry: () => fetchOnce(true) };
 };
 
 const Avatar = ({
@@ -79,26 +95,65 @@ const Avatar = ({
   size: 'sm' | 'md';
   gradientCls: string;
 }) => {
-  const snoo = useSnoovatar(username);
+  const { url, resolved, retry } = useSnoovatar(username);
+  const [broken, setBroken] = useState(false);
+  const [showRetry, setShowRetry] = useState(false);
   const initial = initialFor(username);
   const sizeCls = size === 'sm' ? 'w-8 h-8 text-sm' : 'w-9 h-9 text-sm';
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional reset when url changes
+    setBroken(false);
+  }, [url]);
+
+  useEffect(() => {
+    if (resolved && (!url || broken)) {
+      const id = setTimeout(() => setShowRetry(true), 2000);
+      return () => clearTimeout(id);
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- transition out of the showRetry state when conditions are no longer met
+    setShowRetry(false);
+    return undefined;
+  }, [resolved, url, broken]);
+
+  const showImage = url && !broken;
+
   return (
     <div
-      className={`shrink-0 ${sizeCls} rounded-full bg-gradient-to-br ${gradientCls} grid place-items-center text-white font-bold shadow-sm select-none overflow-hidden`}
-      aria-hidden
+      className={`shrink-0 ${sizeCls} rounded-full bg-gradient-to-br ${gradientCls} grid place-items-center text-white font-bold shadow-sm select-none overflow-hidden relative`}
     >
-      {snoo ? (
+      {showImage ? (
         <img
-          src={snoo}
+          src={url}
           alt=""
           loading="lazy"
           className="w-full h-full object-cover"
-          onError={(e) => {
-            (e.currentTarget as HTMLImageElement).style.display = 'none';
-          }}
+          onError={() => setBroken(true)}
         />
       ) : (
-        initial
+        <span aria-hidden>{initial}</span>
+      )}
+      {!showImage && showRetry && (
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={(e) => {
+            e.stopPropagation();
+            setBroken(false);
+            void retry();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.stopPropagation();
+              setBroken(false);
+              void retry();
+            }
+          }}
+          title="Retry loading avatar"
+          className="absolute inset-0 grid place-items-center bg-black/40 hover:bg-black/55 transition-colors text-[9px] font-normal text-white cursor-pointer"
+        >
+          retry
+        </span>
       )}
     </div>
   );
@@ -456,36 +511,38 @@ const Group = ({
             <ChevronIcon open={expanded} />
           </button>
         </div>
-        <div className="mt-2.5 flex gap-1.5">
-          <button
-            disabled={bulkBusy}
-            onClick={() => handleBulk('approve')}
-            className={`flex-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 ${
-              pendingBulk === 'approve'
-                ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 dark:bg-emerald-500 dark:hover:bg-emerald-400 dark:border-emerald-500 animate-pulse'
-                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-300 border-emerald-200/50 dark:border-emerald-800/50'
-            }`}
-            title={`Approve all ${group.items.length} items from u/${group.authorName}`}
-          >
-            {pendingBulk === 'approve'
-              ? `Confirm: approve ${group.items.length}`
-              : 'Approve all'}
-          </button>
-          <button
-            disabled={bulkBusy}
-            onClick={() => handleBulk('remove')}
-            className={`flex-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 ${
-              pendingBulk === 'remove'
-                ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-600 dark:bg-rose-500 dark:hover:bg-rose-400 dark:border-rose-500 animate-pulse'
-                : 'bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:hover:bg-rose-900/50 dark:text-rose-300 border-rose-200/50 dark:border-rose-800/50'
-            }`}
-            title={`Remove all ${group.items.length} items from u/${group.authorName}`}
-          >
-            {pendingBulk === 'remove'
-              ? `Confirm: remove ${group.items.length}`
-              : 'Remove all'}
-          </button>
-        </div>
+        {!expanded && (
+          <div className="mt-2.5 flex gap-1.5">
+            <button
+              disabled={bulkBusy}
+              onClick={() => handleBulk('approve')}
+              className={`flex-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 ${
+                pendingBulk === 'approve'
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 dark:bg-emerald-500 dark:hover:bg-emerald-400 dark:border-emerald-500 animate-pulse'
+                  : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-300 border-emerald-200/50 dark:border-emerald-800/50'
+              }`}
+              title={`Approve all ${group.items.length} items from u/${group.authorName}`}
+            >
+              {pendingBulk === 'approve'
+                ? `Confirm: approve ${group.items.length}`
+                : 'Approve all'}
+            </button>
+            <button
+              disabled={bulkBusy}
+              onClick={() => handleBulk('remove')}
+              className={`flex-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 ${
+                pendingBulk === 'remove'
+                  ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-600 dark:bg-rose-500 dark:hover:bg-rose-400 dark:border-rose-500 animate-pulse'
+                  : 'bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:hover:bg-rose-900/50 dark:text-rose-300 border-rose-200/50 dark:border-rose-800/50'
+              }`}
+              title={`Remove all ${group.items.length} items from u/${group.authorName}`}
+            >
+              {pendingBulk === 'remove'
+                ? `Confirm: remove ${group.items.length}`
+                : 'Remove all'}
+            </button>
+          </div>
+        )}
       </div>
       {expanded && (
         <ul className="list-none">
@@ -592,6 +649,30 @@ const ACTION_COLORS: Record<ActionEntry['action'], string> = {
   mute: 'bg-amber-500',
 };
 
+const relativeTime = (timestamp: number, now: number): string => {
+  const diff = Math.max(0, now - timestamp);
+  const min = 60_000;
+  const hr = 60 * min;
+  const day = 24 * hr;
+  if (diff < min) return 'just now';
+  if (diff < hr) {
+    const m = Math.max(1, Math.round(diff / min));
+    return `${m} min ago`;
+  }
+  if (diff < day) {
+    const h = Math.max(1, Math.round(diff / hr));
+    return `${h} hr ago`;
+  }
+  const d = Math.max(1, Math.round(diff / day));
+  return `${d} day${d === 1 ? '' : 's'} ago`;
+};
+
+const TICKS: Array<{ label: string; pct: number }> = [
+  { label: '21d', pct: 30 },
+  { label: '14d', pct: 53.33 },
+  { label: '7d', pct: 76.67 },
+];
+
 const Timeline = ({ actions }: { actions: ActionEntry[] }) => {
   const [now] = useState(() => Date.now());
   if (actions.length === 0) {
@@ -602,21 +683,43 @@ const Timeline = ({ actions }: { actions: ActionEntry[] }) => {
     );
   }
   const windowMs = 30 * 24 * 60 * 60 * 1000;
+  const mostRecent = actions.reduce(
+    (max, a) => (a.timestamp > max ? a.timestamp : max),
+    0
+  );
   return (
     <div>
-      <div className="relative h-8 rounded-md bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-900 dark:to-gray-900/40 border border-gray-200/60 dark:border-gray-800/60">
+      <p className="text-[11px] text-gray-600 dark:text-gray-400 mb-2">
+        <span className="font-semibold text-gray-800 dark:text-gray-200">
+          {actions.length}
+        </span>{' '}
+        action{actions.length === 1 ? '' : 's'} logged
+        <span className="text-gray-400 dark:text-gray-500"> · most recent: </span>
+        <span className="font-medium text-gray-800 dark:text-gray-200">
+          {relativeTime(mostRecent, now)}
+        </span>
+      </p>
+      <div className="relative h-10 rounded-md bg-gradient-to-r from-gray-100 to-gray-50 dark:from-gray-900 dark:to-gray-900/40 border border-gray-200/60 dark:border-gray-800/60 overflow-hidden">
+        {TICKS.map((t) => (
+          <div
+            key={t.label}
+            className="absolute top-1 bottom-1 border-l border-dashed border-gray-300/70 dark:border-gray-700/60"
+            style={{ left: `${t.pct}%` }}
+            aria-hidden
+          />
+        ))}
         {actions.map((a, idx) => {
           const ageMs = now - a.timestamp;
           const pct = Math.max(
-            0,
-            Math.min(100, ((windowMs - ageMs) / windowMs) * 100)
+            2,
+            Math.min(98, ((windowMs - ageMs) / windowMs) * 100)
           );
-          const yJitter = (idx % 3) * 5;
+          const yJitter = (idx % 4) * 5;
           return (
             <div
               key={`${a.itemId}-${a.timestamp}`}
-              title={`${a.action} by ${a.modId} · ${new Date(a.timestamp).toLocaleDateString()}`}
-              className={`absolute w-2 h-2 rounded-full ring-2 ring-white dark:ring-gray-900 ${ACTION_COLORS[a.action]}`}
+              title={`${a.action} by ${a.modId} · ${new Date(a.timestamp).toLocaleString()}`}
+              className={`absolute w-2.5 h-2.5 rounded-full ring-2 ring-white dark:ring-gray-900 ${ACTION_COLORS[a.action]}`}
               style={{
                 left: `${pct}%`,
                 top: `${10 + yJitter}px`,
@@ -626,9 +729,18 @@ const Timeline = ({ actions }: { actions: ActionEntry[] }) => {
           );
         })}
       </div>
-      <div className="flex justify-between text-[10px] text-gray-500 dark:text-gray-400 mt-1.5 px-0.5">
-        <span>30 days ago</span>
-        <span>today</span>
+      <div className="relative mt-1.5 h-3 text-[10px] text-gray-500 dark:text-gray-400">
+        <span className="absolute left-0">30 days ago</span>
+        {TICKS.map((t) => (
+          <span
+            key={t.label}
+            className="absolute text-gray-400 dark:text-gray-500"
+            style={{ left: `${t.pct}%`, transform: 'translateX(-50%)' }}
+          >
+            {t.label}
+          </span>
+        ))}
+        <span className="absolute right-0">today</span>
       </div>
       <div className="flex flex-wrap items-center gap-3 mt-2 text-[10px] text-gray-500 dark:text-gray-400">
         <span className="inline-flex items-center gap-1">
