@@ -12,6 +12,7 @@ export const k = {
   userSnoovatar: (username: string) => `huddle:user:${username}:snoovatar`,
   summary: (itemId: string) => `huddle:summary:${itemId}`,
   suggestion: (itemId: string) => `huddle:suggestion:${itemId}`,
+  geminiBlockedUntil: () => `huddle:gemini:blocked-until`,
 };
 
 export const USER_STATS_TTL_SECONDS = 24 * 60 * 60;

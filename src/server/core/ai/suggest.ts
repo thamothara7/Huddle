@@ -2,6 +2,37 @@ import { redis, settings } from '@devvit/web/server';
 import { k } from '../keys';
 import type { ModSuggestion } from '../../../shared/api';
 
+// Global circuit breaker — once any Gemini call hits a 429 or Devvit's
+// outbound-HTTP cap, set a sub-wide cooldown so subsequent calls skip
+// Gemini entirely and use the heuristic. Avoids hammering an API we
+// know is blocked when many items load in quick succession.
+const GEMINI_COOLDOWN_SECONDS = 5 * 60;
+
+const isGeminiBlocked = async (): Promise<boolean> => {
+  try {
+    const until = await redis.get(k.geminiBlockedUntil());
+    if (!until) return false;
+    const ts = Number.parseInt(until, 10);
+    return Number.isFinite(ts) && ts > Date.now();
+  } catch {
+    return false;
+  }
+};
+
+const tripGeminiCircuit = async (reason: string): Promise<void> => {
+  const until = Date.now() + GEMINI_COOLDOWN_SECONDS * 1000;
+  try {
+    await redis.set(k.geminiBlockedUntil(), String(until), {
+      expiration: new Date(until + 1000),
+    });
+    console.warn(
+      `[huddle] gemini circuit OPEN for ${GEMINI_COOLDOWN_SECONDS}s — reason: ${reason}`
+    );
+  } catch {
+    // best effort
+  }
+};
+
 const GEMINI_MODEL = 'gemini-flash-latest';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
@@ -149,6 +180,20 @@ export const getOrGenerateSuggestion = async (
     return heuristic;
   }
 
+  // Circuit breaker: if any prior call within the last 5 min hit a 429 or
+  // Devvit's outbound-HTTP cap, skip the Gemini call entirely. New items
+  // arriving in a batch (e.g. modqueue full of reports) would each fire
+  // their own Gemini request — N items × 1 call = easy to blow the rate
+  // limit. The circuit caches that knowledge sub-wide so we use the
+  // heuristic until cooldown expires.
+  if (await isGeminiBlocked()) {
+    const heuristic = computeHeuristicSuggestion(ctx);
+    // Shorter cache than a normal heuristic write — when the circuit
+    // closes we want to retry the LLM relatively quickly for fresh items.
+    await writeSuggestionToCache(itemId, heuristic, 15 * 60);
+    return heuristic;
+  }
+
   const factDict = {
     itemType: ctx.itemType,
     userReportReasons: ctx.userReportReasons,
@@ -200,10 +245,16 @@ export const getOrGenerateSuggestion = async (
       }),
     });
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
     console.error(
       `[huddle] suggestion[${itemId}] fetch threw — using heuristic fallback:`,
-      err instanceof Error ? err.message : err
+      msg
     );
+    // Devvit's outbound-HTTP rate limit surfaces as 'too many requests'
+    // (gRPC status 2). Trip the circuit so we stop hammering the API.
+    if (/too many requests|rate.?limit|429/i.test(msg)) {
+      await tripGeminiCircuit(`fetch threw: ${msg.slice(0, 80)}`);
+    }
     const heuristic = computeHeuristicSuggestion(ctx);
     await writeSuggestionToCache(itemId, heuristic, 60 * 60);
     return heuristic;
@@ -219,10 +270,11 @@ export const getOrGenerateSuggestion = async (
     console.warn(
       `[huddle] suggestion[${itemId}] gemini ${response.status} — using heuristic fallback. body=${body}`
     );
+    // Gemini free-tier 429 → trip circuit so we don't keep firing.
+    if (response.status === 429) {
+      await tripGeminiCircuit(`gemini 429`);
+    }
     const heuristic = computeHeuristicSuggestion(ctx);
-    // Shorter TTL on rate-limit fallbacks so we retry the LLM sooner once
-    // quota resets. For 429 specifically Gemini's free tier resets per day
-    // and per minute — 30 minutes is a reasonable middle ground.
     const ttl = response.status === 429 ? 30 * 60 : 60 * 60;
     await writeSuggestionToCache(itemId, heuristic, ttl);
     return heuristic;
