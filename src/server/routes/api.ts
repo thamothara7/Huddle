@@ -60,8 +60,13 @@ api.get('/summary', async (c) => {
     );
   }
   const facts = await computeUserFacts(item.authorName, subredditId);
-  const summary = await getOrGenerateSummary(itemId, facts);
-  return c.json<SummaryResponse>({ type: 'summary', itemId, summary });
+  const result = await getOrGenerateSummary(itemId, facts);
+  return c.json<SummaryResponse>({
+    type: 'summary',
+    itemId,
+    summary: result.text,
+    source: result.source,
+  });
 });
 
 api.get('/context-peek', async (c) => {

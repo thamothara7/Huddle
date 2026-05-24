@@ -53,6 +53,7 @@ const useQueue = () => {
 
 const useSummary = (itemId: string) => {
   const [summary, setSummary] = useState<string | null>(null);
+  const [source, setSource] = useState<'cache' | 'llm' | 'fallback' | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -60,7 +61,10 @@ const useSummary = (itemId: string) => {
     fetch(`/api/summary?itemId=${encodeURIComponent(itemId)}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(r)))
       .then((data: SummaryResponse) => {
-        if (alive) setSummary(data.summary);
+        if (alive) {
+          setSummary(data.summary);
+          setSource(data.source);
+        }
       })
       .catch(() => {
         if (alive) setSummary(null);
@@ -73,7 +77,7 @@ const useSummary = (itemId: string) => {
     };
   }, [itemId]);
 
-  return { summary, loading };
+  return { summary, source, loading };
 };
 
 const typeLabel = (t: 'post' | 'comment') => (t === 'post' ? 'Post' : 'Comment');
@@ -113,8 +117,14 @@ const ItemRow = ({
   onAction: (a: 'approve' | 'remove') => void;
   onOpenDrawer: () => void;
 }) => {
-  const { summary, loading } = useSummary(item.itemId);
+  const { summary, source, loading } = useSummary(item.itemId);
   const url = redditUrl(item, subredditName);
+  const sourceChip =
+    source === 'llm' || source === 'cache'
+      ? { label: 'AI', cls: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300' }
+      : source === 'fallback'
+        ? { label: 'raw', cls: 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300' }
+        : null;
   return (
     <li className="p-3 flex justify-between items-start gap-3 text-sm border-t border-gray-100 dark:border-gray-800">
       <button
@@ -130,12 +140,23 @@ const ItemRow = ({
             {item.title}
           </div>
         )}
-        <div className="text-gray-700 dark:text-gray-300 text-xs mt-1 leading-snug">
-          {loading ? (
-            <span className="inline-block animate-pulse bg-gray-200 dark:bg-gray-700 h-3 w-48 rounded" />
-          ) : (
-            summary ?? '(summary unavailable)'
+        <div className="text-gray-700 dark:text-gray-300 text-xs mt-1 leading-snug flex items-baseline gap-1.5">
+          {sourceChip && !loading && (
+            <span
+              className={`shrink-0 px-1 py-0.5 rounded text-[9px] font-mono uppercase tracking-wide ${sourceChip.cls}`}
+            >
+              {sourceChip.label}
+            </span>
           )}
+          <span className="min-w-0 truncate">
+            {loading ? (
+              <span className="inline-block animate-pulse bg-gray-200 dark:bg-gray-700 h-3 w-48 rounded align-middle" />
+            ) : summary && summary.length > 0 ? (
+              summary
+            ) : (
+              <span className="italic text-gray-500">(summary unavailable)</span>
+            )}
+          </span>
         </div>
         <div className="text-gray-500 text-[11px] mt-0.5">
           Reports:{' '}
@@ -235,7 +256,7 @@ const Group = ({
       </div>
     </div>
     {expanded && (
-      <ul>
+      <ul className="list-none">
         {group.items.map((item) => (
           <ItemRow
             key={item.itemId}
@@ -550,7 +571,7 @@ const App = () => {
           </div>
         )}
 
-        <ul className="space-y-2">
+        <ul className="list-none space-y-2">
           {groups.map((g) => (
             <Group
               key={g.groupKey}

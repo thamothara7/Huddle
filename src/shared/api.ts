@@ -70,10 +70,13 @@ export type UserFacts = {
   removedInSubTotal: number;
 };
 
+export type SummarySource = 'cache' | 'llm' | 'fallback';
+
 export type SummaryResponse = {
   type: 'summary';
   itemId: string;
   summary: string;
+  source: SummarySource;
 };
 
 export type RecentEntry = {

@@ -1,6 +1,7 @@
 import { redis, settings } from '@devvit/web/server';
 import { k } from '../keys';
 import { factsAsRawSentence, type UserFacts } from './facts';
+import type { SummarySource } from '../../../shared/api';
 
 const GEMINI_MODEL = 'gemini-flash-latest';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
@@ -12,19 +13,26 @@ const SYSTEM_PROMPT = `You format moderator queue context. You receive a structu
 - Maximum 25 words.
 - Output the sentence only. No preamble, no markdown.`;
 
+export type SummaryResult = {
+  text: string;
+  source: SummarySource;
+};
+
 export const getOrGenerateSummary = async (
   itemId: string,
   facts: UserFacts
-): Promise<string> => {
+): Promise<SummaryResult> => {
   const cached = await redis.get(k.summary(itemId));
-  if (cached) return cached;
+  if (cached) {
+    return { text: cached, source: 'cache' };
+  }
 
   const apiKey = await readGeminiKey();
   if (!apiKey) {
     console.warn(
-      `[huddle] summary fallback for ${itemId}: no Gemini key configured (set in app settings at developers.reddit.com/apps/huddle-mod)`
+      `[huddle] summary[${itemId}] fallback: no Gemini key configured`
     );
-    return factsAsRawSentence(facts);
+    return { text: factsAsRawSentence(facts), source: 'fallback' };
   }
 
   let response: Response;
@@ -51,31 +59,55 @@ export const getOrGenerateSummary = async (
       }),
     });
   } catch (err) {
-    console.error('summary: fetch failed', err);
-    return factsAsRawSentence(facts);
+    console.error(
+      `[huddle] summary[${itemId}] fallback: fetch threw —`,
+      err instanceof Error ? err.message : err
+    );
+    return { text: factsAsRawSentence(facts), source: 'fallback' };
   }
 
   if (!response.ok) {
-    console.warn(`summary: gemini returned ${response.status}`);
-    return factsAsRawSentence(facts);
+    let body = '';
+    try {
+      body = (await response.text()).slice(0, 200);
+    } catch {
+      // ignore
+    }
+    console.warn(
+      `[huddle] summary[${itemId}] fallback: gemini ${response.status} — ${body}`
+    );
+    return { text: factsAsRawSentence(facts), source: 'fallback' };
   }
 
   let parsed: unknown;
   try {
     parsed = await response.json();
-  } catch {
-    return factsAsRawSentence(facts);
+  } catch (err) {
+    console.error(
+      `[huddle] summary[${itemId}] fallback: malformed JSON —`,
+      err instanceof Error ? err.message : err
+    );
+    return { text: factsAsRawSentence(facts), source: 'fallback' };
   }
 
   const text = extractText(parsed);
-  if (!text) return factsAsRawSentence(facts);
+  if (!text) {
+    console.warn(
+      `[huddle] summary[${itemId}] fallback: empty/blocked candidate`
+    );
+    return { text: factsAsRawSentence(facts), source: 'fallback' };
+  }
 
   try {
     await redis.set(k.summary(itemId), text);
   } catch (err) {
-    console.error('summary: cache write failed', err);
+    console.error(
+      `[huddle] summary[${itemId}] cache write failed —`,
+      err instanceof Error ? err.message : err
+    );
   }
-  return text;
+  console.log(`[huddle] summary[${itemId}] llm ok`);
+  return { text, source: 'llm' };
 };
 
 const readGeminiKey = async (): Promise<string | undefined> => {
