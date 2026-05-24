@@ -450,27 +450,29 @@ const ItemRow = ({
       </button>
 
       {!rejectOpen && (
-        <div className="mt-2.5 flex flex-wrap gap-1.5">
-          <button
-            disabled={busy}
-            onClick={() => onAction('approve')}
-            className="flex-1 sm:flex-none px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-300 disabled:opacity-50 text-xs font-medium border border-emerald-200/50 dark:border-emerald-800/50 transition-colors"
-            aria-label="Approve"
-          >
-            Approve
-          </button>
-          <button
-            disabled={busy}
-            onClick={() => onAction('remove')}
-            className="flex-1 sm:flex-none px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:hover:bg-rose-900/50 dark:text-rose-300 disabled:opacity-50 text-xs font-medium border border-rose-200/50 dark:border-rose-800/50 transition-colors"
-            aria-label="Remove"
-          >
-            Remove
-          </button>
+        <div className="mt-2.5 space-y-1.5">
+          <div className="flex gap-1.5">
+            <button
+              disabled={busy}
+              onClick={() => onAction('approve')}
+              className="flex-1 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 dark:text-emerald-300 disabled:opacity-50 text-xs font-medium border border-emerald-200/50 dark:border-emerald-800/50 transition-colors"
+              aria-label="Approve"
+            >
+              Approve
+            </button>
+            <button
+              disabled={busy}
+              onClick={() => onAction('remove')}
+              className="flex-1 px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:hover:bg-rose-900/50 dark:text-rose-300 disabled:opacity-50 text-xs font-medium border border-rose-200/50 dark:border-rose-800/50 transition-colors"
+              aria-label="Remove"
+            >
+              Remove
+            </button>
+          </div>
           <button
             disabled={busy}
             onClick={openRejectPanel}
-            className="flex-1 sm:flex-none px-2.5 py-1.5 rounded-lg bg-white hover:bg-rose-50 text-rose-700 dark:bg-gray-900/40 dark:hover:bg-rose-900/30 dark:text-rose-300 disabled:opacity-50 text-xs font-medium border border-rose-300/50 dark:border-rose-700/50 transition-colors"
+            className="w-full px-3 py-1.5 rounded-lg bg-rose-50/40 hover:bg-rose-50 text-rose-700/90 dark:bg-rose-950/20 dark:hover:bg-rose-950/40 dark:text-rose-300/90 disabled:opacity-50 text-[11px] font-medium border border-rose-200/60 dark:border-rose-900/50 transition-colors"
             aria-label="Reject with reason"
           >
             Reject with reason
