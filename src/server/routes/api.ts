@@ -18,6 +18,8 @@ import type {
   InitResponse,
   SnoovatarResponse,
   SummaryResponse,
+  UserActionRequest,
+  UserActionResponse,
 } from '../../shared/api';
 
 type ErrorResponse = { status: 'error'; message: string };
@@ -290,4 +292,70 @@ api.post('/action-bulk', async (c) => {
     okCount,
     failCount: results.length - okCount,
   });
+});
+
+const VALID_USER_ACTIONS = new Set(['ban', 'unban', 'mute', 'unmute']);
+
+api.post('/user-action', async (c) => {
+  const body = await c.req.json<UserActionRequest>();
+  const subredditName = context.subredditName;
+  if (!body.username || !subredditName) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: 'missing username or subreddit context' },
+      400
+    );
+  }
+  if (!VALID_USER_ACTIONS.has(body.action)) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: `invalid action: ${body.action}` },
+      400
+    );
+  }
+  const reason = body.reason || 'Actioned via Huddle';
+  try {
+    switch (body.action) {
+      case 'ban':
+        await reddit.banUser({
+          username: body.username,
+          subredditName,
+          reason,
+          note: 'Banned via Huddle',
+        });
+        break;
+      case 'unban':
+        await reddit.unbanUser(body.username, subredditName);
+        break;
+      case 'mute':
+        await reddit.muteUser({
+          username: body.username,
+          subredditName,
+          note: 'Muted via Huddle',
+        });
+        break;
+      case 'unmute':
+        await reddit.unmuteUser(body.username, subredditName);
+        break;
+    }
+    console.log(
+      `[huddle] /api/user-action ${body.action} u/${body.username} ok`
+    );
+    return c.json<UserActionResponse>({
+      type: 'user-action',
+      username: body.username,
+      action: body.action,
+      ok: true,
+    });
+  } catch (error) {
+    console.error(
+      `[huddle] /api/user-action ${body.action} u/${body.username} failed:`,
+      error instanceof Error ? error.message : error
+    );
+    return c.json<ErrorResponse>(
+      {
+        status: 'error',
+        message: error instanceof Error ? error.message : 'user action failed',
+      },
+      500
+    );
+  }
 });

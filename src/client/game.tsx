@@ -14,6 +14,7 @@ import type {
   RecentEntry,
   SnoovatarResponse,
   SummaryResponse,
+  UserActionResponse,
   UserFacts,
 } from '../shared/api';
 
@@ -336,19 +337,22 @@ const ItemRow = ({
           )}
         </p>
 
-        <p className="text-[11px] text-gray-500 dark:text-gray-400 break-words">
-          <span className="font-medium text-gray-600 dark:text-gray-300 mr-1">
-            Reports:
-          </span>
-          {item.reportReasons.length > 0
-            ? item.reportReasons.join(' · ')
-            : '(no user reports)'}
-          {item.reportCount > 1 && (
-            <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-medium">
-              {item.reportCount}
+        {(item.reportReasons.length > 0 ||
+          !(item.modReports && item.modReports.length > 0)) && (
+          <p className="text-[11px] text-gray-500 dark:text-gray-400 break-words">
+            <span className="font-medium text-gray-600 dark:text-gray-300 mr-1">
+              Reports:
             </span>
-          )}
-        </p>
+            {item.reportReasons.length > 0
+              ? item.reportReasons.join(' · ')
+              : 'none'}
+            {item.reportCount > 1 && (
+              <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-medium">
+                {item.reportCount}
+              </span>
+            )}
+          </p>
+        )}
 
         {item.modReports && item.modReports.length > 0 && (
           <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300 break-words">
@@ -819,6 +823,12 @@ const ContextPeekDrawer = ({
   const [data, setData] = useState<ContextPeekResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Ban-user action state (click-twice confirm pattern, mirrors group bulk)
+  const [pendingBan, setPendingBan] = useState(false);
+  const [banBusy, setBanBusy] = useState(false);
+  const [banError, setBanError] = useState<string | null>(null);
+  const [banned, setBanned] = useState(false);
+
   useEffect(() => {
     let alive = true;
     fetch(`/api/context-peek?itemId=${encodeURIComponent(itemId)}`)
@@ -836,6 +846,12 @@ const ContextPeekDrawer = ({
   }, [itemId]);
 
   useEffect(() => {
+    if (!pendingBan) return;
+    const id = setTimeout(() => setPendingBan(false), 3000);
+    return () => clearTimeout(id);
+  }, [pendingBan]);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
@@ -845,6 +861,38 @@ const ContextPeekDrawer = ({
 
   const authorName = data?.authorName ?? item.authorName;
   const gradient = avatarGradient(authorName);
+
+  const handleBan = async () => {
+    if (banBusy || banned) return;
+    if (!pendingBan) {
+      setPendingBan(true);
+      return;
+    }
+    setPendingBan(false);
+    setBanBusy(true);
+    setBanError(null);
+    try {
+      const res = await fetch('/api/user-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: authorName, action: 'ban' }),
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => null);
+        throw new Error(
+          (errBody as { message?: string } | null)?.message ??
+            `HTTP ${res.status}`
+        );
+      }
+      const data: UserActionResponse = await res.json();
+      if (!data.ok) throw new Error('ban returned not-ok');
+      setBanned(true);
+    } catch (err) {
+      setBanError(err instanceof Error ? err.message : 'ban failed');
+    } finally {
+      setBanBusy(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -894,7 +942,33 @@ const ContextPeekDrawer = ({
             >
               View profile
             </button>
+            {banned ? (
+              <span className="text-rose-700 dark:text-rose-300 font-semibold">
+                Banned
+              </span>
+            ) : (
+              <button
+                disabled={banBusy}
+                onClick={handleBan}
+                className={`disabled:opacity-50 hover:underline ${
+                  pendingBan
+                    ? 'text-rose-700 dark:text-rose-300 font-semibold animate-pulse'
+                    : 'text-rose-600 dark:text-rose-400'
+                }`}
+              >
+                {banBusy
+                  ? 'Banning...'
+                  : pendingBan
+                    ? `Confirm: ban u/${authorName}`
+                    : 'Ban user'}
+              </button>
+            )}
           </div>
+          {banError && (
+            <p className="mt-1.5 text-[11px] text-rose-700 dark:text-rose-300">
+              Ban failed: {banError}
+            </p>
+          )}
         </header>
 
         <div className="p-3 sm:p-4 space-y-5 flex-1">

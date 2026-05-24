@@ -67,6 +67,21 @@ export type BulkActionResponse = {
   failCount: number;
 };
 
+export type UserActionKind = 'ban' | 'unban' | 'mute' | 'unmute';
+
+export type UserActionRequest = {
+  username: string;
+  action: UserActionKind;
+  reason?: string;
+};
+
+export type UserActionResponse = {
+  type: 'user-action';
+  username: string;
+  action: UserActionKind;
+  ok: boolean;
+};
+
 export type UserFacts = {
   accountAgeDays: number;
   postsInSubTotal: number;
