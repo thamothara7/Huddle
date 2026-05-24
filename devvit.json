@@ -1,0 +1,64 @@
+{
+  "$schema": "https://developers.reddit.com/schema/config-file.v1.json",
+  "name": "huddle-mod",
+  "permissions": {
+    "redis": true,
+    "realtime": true,
+    "http": {
+      "enable": true,
+      "domains": ["generativelanguage.googleapis.com"]
+    }
+  },
+  "post": {
+    "dir": "dist/client",
+    "entrypoints": {
+      "default": {
+        "inline": true,
+        "entry": "splash.html"
+      },
+      "game": {
+        "entry": "game.html"
+      }
+    }
+  },
+  "server": {
+    "dir": "dist/server",
+    "entry": "index.cjs"
+  },
+  "menu": {
+    "items": [
+      {
+        "label": "Install Huddle here",
+        "description": "Create a Huddle modqueue post in this subreddit",
+        "location": "subreddit",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/post-create"
+      }
+    ]
+  },
+  "triggers": {
+    "onAppInstall": "/internal/triggers/on-app-install",
+    "onPostReport": "/internal/triggers/on-post-report",
+    "onCommentReport": "/internal/triggers/on-comment-report",
+    "onModAction": "/internal/triggers/on-mod-action",
+    "onPostSubmit": "/internal/triggers/on-post-submit",
+    "onCommentSubmit": "/internal/triggers/on-comment-submit"
+  },
+  "settings": {
+    "subreddit": {
+      "geminiApiKey": {
+        "type": "string",
+        "label": "Gemini API key",
+        "helpText": "Free key from https://aistudio.google.com/apikey. Powers the one-sentence AI summaries. Without it, Huddle falls back to raw facts.",
+        "placeholder": "AIza..."
+      }
+    }
+  },
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "vite build"
+  },
+  "dev": {
+    "subreddit": "huddle_mod_dev"
+  }
+}
