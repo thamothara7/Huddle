@@ -498,8 +498,23 @@ const Group = ({
                 </span>
               </p>
               <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                {group.items.length}{' '}
-                {group.items.length === 1 ? 'report' : 'reports'}
+                {group.items.length} reported item
+                {group.items.length === 1 ? '' : 's'}
+                {(() => {
+                  const total = group.items.reduce(
+                    (sum, i) => sum + (i.reportCount || 0),
+                    0
+                  );
+                  return total > group.items.length ? (
+                    <>
+                      {' · '}
+                      <span className="font-medium text-gray-600 dark:text-gray-300">
+                        {total}
+                      </span>{' '}
+                      reports
+                    </>
+                  ) : null;
+                })()}
               </p>
             </div>
           </button>
