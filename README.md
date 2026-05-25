@@ -1,4 +1,4 @@
-<p align="center"><img alt="Huddle logo" src="https://raw.githubusercontent.com/thamothara7/Huddle/main/public/huddle-logo.svg" width="180" /></p>
+![Huddle logo](https://raw.githubusercontent.com/thamothara7/Huddle/main/public/huddle-logo.svg)
 
 # Huddle
 
