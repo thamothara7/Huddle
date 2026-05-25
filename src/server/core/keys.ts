@@ -13,6 +13,7 @@ export const k = {
   summary: (itemId: string) => `huddle:summary:${itemId}`,
   suggestion: (itemId: string) => `huddle:suggestion:${itemId}`,
   geminiBlockedUntil: () => `huddle:gemini:blocked-until`,
+  backfillDone: (subId: string) => `huddle:backfill:${subId}:done`,
 };
 
 export const USER_STATS_TTL_SECONDS = 24 * 60 * 60;

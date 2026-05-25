@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { context, reddit, redis } from '@devvit/web/server';
 import { fetchGroupedQueue } from '../core/queue';
+import { backfillModqueue } from '../core/backfill';
 import { getItem, getItems, setItem } from '../core/items';
 import { listOpenItemIds, removeItemFromAllGroups } from '../core/groups';
 import { isThingId, isUserId } from '../core/ids';
@@ -40,6 +41,10 @@ api.get('/init', async (c) => {
       400
     );
   }
+  // Safety net: if the AppInstall trigger missed (e.g. installed before this
+  // backfill code shipped), the first /init call will run it. Idempotent —
+  // the sentinel in Redis makes subsequent calls a no-op.
+  await backfillModqueue(subredditId);
   const [username, groups] = await Promise.all([
     reddit.getCurrentUsername(),
     fetchGroupedQueue(subredditId),

@@ -10,6 +10,7 @@ import type {
 } from '@devvit/web/shared';
 import { context, reddit } from '@devvit/web/server';
 import { createPost } from '../core/post';
+import { backfillModqueue } from '../core/backfill';
 import { getItem, setItem, upsertReport } from '../core/items';
 import { addItemToGroups, removeItemFromAllGroups } from '../core/groups';
 import { isCommentId, isUserId } from '../core/ids';
@@ -54,10 +55,19 @@ triggers.post('/on-app-install', async (c) => {
   try {
     const post = await createPost();
     const input = await c.req.json<OnAppInstallRequest>();
+    // Backfill existing modqueue items so reports filed before install also
+    // appear in Huddle. Triggers only fire for new events; without this sweep
+    // the queue would look empty until the next report comes in.
+    const subId = context.subredditId;
+    let backfillCount = 0;
+    if (subId) {
+      const res = await backfillModqueue(subId);
+      backfillCount = res.count;
+    }
     return c.json<TriggerResponse>(
       {
         status: 'success',
-        message: `Huddle installed in r/${context.subredditName} (post ${post.id}, trigger ${input.type})`,
+        message: `Huddle installed in r/${context.subredditName} (post ${post.id}, trigger ${input.type}, backfilled ${backfillCount} items)`,
       },
       200
     );

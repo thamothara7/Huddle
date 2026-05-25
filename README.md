@@ -1,6 +1,8 @@
-![Huddle logo](https://raw.githubusercontent.com/thamothara7/Huddle/main/public/huddle-logo.svg)
+<p align="center"><img alt="Huddle logo" src="https://raw.githubusercontent.com/thamothara7/Huddle/main/public/huddle-logo.svg" width="180" /></p>
 
 # Huddle
+
+**The Reddit modqueue, rebuilt: grouping, AI context, and one-click actions — without leaving Reddit.**
 
 > Reports cluster by user. A factual one-sentence summary appears on every queue item. One click reveals the underlying context — without leaving Reddit.
 
@@ -52,7 +54,7 @@ You must be a moderator of the target subreddit.
 2. Click **Install** and pick the subreddit.
 3. *(Optional)* If you want AI summaries instead of the raw-facts fallback, set your own Gemini key — see "AI summaries" below.
 4. In your subreddit, open the subreddit menu (`···`) and click **Install Huddle here**. A custom post titled "Huddle modqueue" is created.
-5. Open the post and click **Open queue**. Reports will appear here automatically, clustered by user.
+5. Open the post and click **Open queue**. Existing modqueue items are backfilled on first load (up to 100), and new reports stream in via triggers automatically — both clustered by user.
 
 ### AI summaries (optional)
 
@@ -125,7 +127,7 @@ Huddle is designed for the mod queue that Bajpai's research described — a few 
 | 5,000+ items, many simultaneous mods | — | Needs the architectural changes below. |
 
 **Why it scales the way it does:**
-- `/api/init` returns the full grouped queue every 5 s — fine when the payload is under ~100 KB.
+- `/api/init` returns the full grouped queue every 5 s — fine when the payload is under ~100 KB. With 20 mods watching, that's ~240 requests/minute just from idle browsers; a 10-second default plus a **Refresh now** button would halve the load while keeping the perceived freshness identical. Tracked as a polish item; not a v1 blocker.
 - Each `ItemRow` lazy-fetches its AI summary on mount — fast for small lists, expensive when hundreds of rows render at once.
 - Redis ZSETs handle thousands of members per group, so the data layer isn't the limiter; the network round-trip and the React render are.
 
