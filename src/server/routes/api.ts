@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { context, reddit, redis } from '@devvit/web/server';
 import { fetchGroupedQueue } from '../core/queue';
 import { backfillModqueue } from '../core/backfill';
+import { verifyModeratorAccess } from '../core/auth';
 import { getItem, getItems, setItem } from '../core/items';
 import { listOpenItemIds, removeItemFromAllGroups } from '../core/groups';
 import { isThingId, isUserId } from '../core/ids';
@@ -32,6 +33,17 @@ import type {
 type ErrorResponse = { status: 'error'; message: string };
 
 export const api = new Hono();
+
+api.use('*', async (c, next) => {
+  const access = await verifyModeratorAccess();
+  if (!access.ok) {
+    return c.json<ErrorResponse>(
+      { status: 'error', message: access.message },
+      access.status
+    );
+  }
+  await next();
+});
 
 api.get('/init', async (c) => {
   const { postId, subredditId, subredditName } = context;
@@ -267,10 +279,14 @@ api.get('/context-peek', async (c) => {
 const performAction = async (
   itemId: `t3_${string}` | `t1_${string}`,
   action: 'approve' | 'remove',
-  username: string | undefined
+  username: string | undefined,
+  subredditId: string
 ): Promise<void> => {
   const item = await getItem(itemId);
   if (!item) throw new Error(`item ${itemId} not found`);
+  if (item.subId !== subredditId) {
+    throw new Error('item is not in this subreddit');
+  }
   if (action === 'approve') {
     await reddit.approve(itemId);
   } else {
@@ -287,7 +303,12 @@ const performAction = async (
 
 api.post('/action', async (c) => {
   const body = await c.req.json<ActionRequest>();
-  if (!body.itemId || (body.action !== 'approve' && body.action !== 'remove')) {
+  const { subredditId } = context;
+  if (
+    !body.itemId ||
+    !subredditId ||
+    (body.action !== 'approve' && body.action !== 'remove')
+  ) {
     return c.json<ErrorResponse>(
       { status: 'error', message: 'invalid request' },
       400
@@ -301,7 +322,7 @@ api.post('/action', async (c) => {
   }
   try {
     const username = await reddit.getCurrentUsername();
-    await performAction(body.itemId, body.action, username);
+    await performAction(body.itemId, body.action, username, subredditId);
     return c.json<ActionResponse>({
       type: 'action',
       itemId: body.itemId,
@@ -322,9 +343,11 @@ api.post('/action', async (c) => {
 
 api.post('/action-bulk', async (c) => {
   const body = await c.req.json<BulkActionRequest>();
+  const { subredditId } = context;
   if (
     !Array.isArray(body.itemIds) ||
     body.itemIds.length === 0 ||
+    !subredditId ||
     (body.action !== 'approve' && body.action !== 'remove')
   ) {
     return c.json<ErrorResponse>(
@@ -340,7 +363,7 @@ api.post('/action-bulk', async (c) => {
       continue;
     }
     try {
-      await performAction(id, body.action, username);
+      await performAction(id, body.action, username, subredditId);
       results.push({ itemId: id, ok: true });
     } catch (error) {
       console.error(`bulk action failed for ${id}:`, error);
@@ -507,6 +530,7 @@ api.post('/reject-with-reason', async (c) => {
     //    submitComment accepts both t3_ (post) and t1_ (comment) ids — for
     //    posts the reply is top-level, for comments it nests under the comment.
     let commentId: string | undefined;
+    let warning: string | undefined;
     try {
       const reply = await reddit.submitComment({
         id: body.itemId,
@@ -528,8 +552,9 @@ api.post('/reject-with-reason', async (c) => {
         '[huddle] reject-with-reason: posting reason comment failed:',
         commentErr instanceof Error ? commentErr.message : commentErr
       );
-      // Removal already succeeded — proceed to mark actioned even if the
-      // reason comment didn't post. Surface in the response.
+      // Removal already succeeded, so preserve local state and make the
+      // partial failure visible to the moderator.
+      warning = 'Item removed, but the removal-reason reply could not be posted.';
     }
 
     // 3. Update local state
@@ -549,6 +574,7 @@ api.post('/reject-with-reason', async (c) => {
       itemId: body.itemId,
       ok: true,
       commentId,
+      warning,
     });
   } catch (error) {
     console.error('[huddle] /api/reject-with-reason failed:', error);

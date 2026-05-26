@@ -13,7 +13,7 @@ export const computeUserFacts = async (
   username: string,
   subId: string
 ): Promise<UserFacts> => {
-  const cached = await redis.get(k.userStats(username));
+  const cached = await redis.get(k.userStats(username, subId));
   if (cached) return JSON.parse(cached) as UserFacts;
 
   const facts: UserFacts = {
@@ -54,7 +54,7 @@ export const computeUserFacts = async (
   }
 
   try {
-    await redis.set(k.userStats(username), JSON.stringify(facts), {
+    await redis.set(k.userStats(username, subId), JSON.stringify(facts), {
       expiration: new Date(Date.now() + USER_STATS_TTL_SECONDS * 1000),
     });
   } catch (err) {

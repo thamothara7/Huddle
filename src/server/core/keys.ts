@@ -4,14 +4,17 @@ export const k = {
   groupTarget: (subId: string, authorKey: string) =>
     `huddle:groups:${subId}:target:${authorKey}`,
   itemGroups: (itemId: string) => `huddle:item-groups:${itemId}`,
-  userStats: (username: string) => `huddle:user:${username}:stats`,
+  userStats: (username: string, subId: string) =>
+    `huddle:user:${username}:stats:${subId}`,
+  moderatorAccess: (subId: string, userId: string) =>
+    `huddle:moderator-access:${subId}:${userId}`,
   userRecent: (username: string, subId: string) =>
     `huddle:user:${username}:recent:${subId}`,
   userActions: (username: string, subId: string) =>
     `huddle:user:${username}:actions:${subId}`,
   userSnoovatar: (username: string) => `huddle:user:${username}:snoovatar`,
-  summary: (itemId: string) => `huddle:summary:${itemId}`,
-  suggestion: (itemId: string) => `huddle:suggestion:${itemId}`,
+  summary: (itemId: string) => `huddle:v2:summary:${itemId}`,
+  suggestion: (itemId: string) => `huddle:v2:suggestion:${itemId}`,
   geminiBlockedUntil: () => `huddle:gemini:blocked-until`,
   backfillDone: (subId: string) => `huddle:backfill:${subId}:done`,
 };

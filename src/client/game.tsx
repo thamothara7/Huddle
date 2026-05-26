@@ -354,7 +354,7 @@ const ItemRow = ({
   subredditName: string;
   busy: boolean;
   onAction: (a: 'approve' | 'remove') => void;
-  onRejected: () => void;
+  onRejected: (warning?: string) => void;
   onOpenDrawer: () => void;
 }) => {
   const { summary, source, loading } = useSummary(item.itemId);
@@ -427,7 +427,7 @@ const ItemRow = ({
       const data: RejectWithReasonResponse = await res.json();
       if (!data.ok) throw new Error('reject returned not-ok');
       closeRejectPanel();
-      onRejected();
+      onRejected(data.warning);
     } catch (err) {
       setRejectError(err instanceof Error ? err.message : 'reject failed');
     } finally {
@@ -649,7 +649,7 @@ const Group = ({
   bulkBusy: boolean;
   onAction: (itemId: string, a: 'approve' | 'remove') => void;
   onBulk: (a: 'approve' | 'remove') => void;
-  onRejected: () => void;
+  onRejected: (warning?: string) => void;
   onOpenDrawer: (item: QueueItem) => void;
 }) => {
   const gradient = avatarGradient(group.authorName);
@@ -1414,7 +1414,10 @@ const App = () => {
                 bulkBusy={bulkBusyKey === g.groupKey}
                 onAction={act}
                 onBulk={(a) => bulkAct(g, a)}
-                onRejected={() => void refresh()}
+                onRejected={(warning) => {
+                  if (warning) setActionError(warning);
+                  void refresh();
+                }}
                 onOpenDrawer={setDrawerItem}
               />
             ))}

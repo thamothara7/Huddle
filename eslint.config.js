@@ -56,6 +56,12 @@ export default defineConfig([
     },
   },
   {
+    files: ['src/client/game.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
+  {
     files: ['**/*.{js,mjs,cjs,ts,tsx}'],
     rules: {
       '@typescript-eslint/no-floating-promises': 'error',

@@ -100,6 +100,7 @@ export type RejectWithReasonResponse = {
   itemId: string;
   ok: boolean;
   commentId?: string;
+  warning?: string;
 };
 
 export type UserFacts = {
